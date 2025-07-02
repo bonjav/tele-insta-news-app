@@ -49,7 +49,7 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>('dark');
+  const [theme, setThemeState] = useState<Theme>('dark'); // Default to dark mode
 
   // Load theme from storage on app start
   useEffect(() => {
@@ -62,8 +62,10 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
       if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark')) {
         setThemeState(savedTheme);
       }
+      // If no theme is saved, dark mode will be used as default (already set in useState)
     } catch (error) {
       console.error('Error loading theme:', error);
+      // On error, dark mode will be used as default
     }
   };
 

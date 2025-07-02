@@ -64,26 +64,29 @@ The app uses a modern database schema with separate tables for articles and tran
 ### Installation
 
 1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
+```bash
+git clone <repository-url>
    cd tele-insta-news-app
    ```
 
 2. **Install dependencies**
    ```bash
-   npm install
-   ```
+npm install
+```
 
 3. **Environment Configuration**
    Create a `.env` file with your Supabase credentials:
    ```
    EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    EXPO_PUBLIC_MAX_ARTICLES_IN_DB=1000
    
    # Debug Configuration (optional)
    EXPO_PUBLIC_ENABLE_DEBUG_PANEL=false
    EXPO_PUBLIC_SHOW_DEBUG_INFO=false
+
+   # UI Configuration (optional)
+   EXPO_PUBLIC_SHOW_LOCATION_SETTING=true
    ```
 
 4. **Database Setup**
@@ -93,8 +96,8 @@ The app uses a modern database schema with separate tables for articles and tran
    ```
 
 5. **Start Development Server**
-   ```bash
-   npm run dev
+```bash
+npm run dev
    ```
 
 ## Configuration
@@ -113,6 +116,12 @@ EXPO_PUBLIC_ENABLE_DEBUG_PANEL=true
 To display additional debug information throughout the app:
 ```
 EXPO_PUBLIC_SHOW_DEBUG_INFO=true
+```
+
+#### Hide Location Setting
+To hide the location selection from the settings sidebar (location functionality remains active):
+```
+EXPO_PUBLIC_SHOW_LOCATION_SETTING=false
 ```
 
 **Note**: Debug features are disabled by default for production builds. Only enable them during development or testing.

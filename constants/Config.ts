@@ -42,6 +42,11 @@ export const Config = {
     SHOW_DEBUG_INFO: process.env.EXPO_PUBLIC_SHOW_DEBUG_INFO === 'true' || false,
   },
   
+  // UI Configuration
+  UI: {
+    SHOW_LOCATION_SETTING: process.env.EXPO_PUBLIC_SHOW_LOCATION_SETTING !== 'false', // Default to true
+  },
+  
   // Performance Configuration
   PERFORMANCE: {
     MAX_RENDER_BATCH: 3,

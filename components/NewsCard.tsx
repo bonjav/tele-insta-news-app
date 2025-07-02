@@ -8,11 +8,11 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  Share,
+  Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ExternalLink, Clock, User } from 'lucide-react-native';
+import { ExternalLink, Share2, User } from 'lucide-react-native';
 import { NewsArticle } from '@/types/news.types';
-import { NewsService } from '@/services/newsService';
 import { useTheme } from '@/contexts/ThemeContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -39,6 +39,18 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
     }
   };
 
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `${article.title}\n\n${article.description}\n\nRead more: ${article.url}`,
+        title: article.title,
+        url: article.url,
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to share article');
+    }
+  };
+
   const handleImageError = () => {
     setImageError(true);
   };
@@ -62,18 +74,12 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
           </View>
         )}
         
-        {/* Source and Time Overlay */}
+        {/* Source Overlay */}
         <View style={styles.imageOverlay}>
           <View style={styles.metaContainer}>
             <View style={styles.sourceContainer}>
               <User size={14} color="white" />
               <Text style={styles.sourceText}>{article.source.name}</Text>
-            </View>
-            <View style={styles.timeContainer}>
-              <Clock size={14} color="white" />
-              <Text style={styles.timeText}>
-                {NewsService.formatTimeAgo(article.publishedAt)}
-              </Text>
             </View>
           </View>
         </View>
@@ -81,6 +87,13 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
 
       {/* Description Section - expanded */}
       <View style={styles.descriptionSection}>
+        {/* Share Icon - positioned on the right */}
+        <TouchableOpacity style={styles.shareIconContainer} onPress={handleShare}>
+          <View style={styles.shareIconBackground}>
+            <Share2 size={16} color="white" />
+          </View>
+        </TouchableOpacity>
+
         <Text style={styles.title} numberOfLines={3}>
           {article.title}
         </Text>
@@ -144,7 +157,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   metaContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
   },
   sourceContainer: {
@@ -161,16 +174,32 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontFamily: 'Inter-Medium',
     marginLeft: 4,
   },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  // Share Icon - positioned on the right
+  shareIconContainer: {
+    position: 'absolute',
+    top: -10,
+    right: 0,
+    zIndex: 10,
   },
-  timeText: {
-    color: 'white',
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    marginLeft: 4,
-    opacity: 0.9,
+  shareIconBackground: {
+    width: 32,
+    height: 32,
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
   },
   // Description Section - expanded to fill space above bottom bar
   descriptionSection: {

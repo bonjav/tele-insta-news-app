@@ -176,69 +176,63 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
               </TouchableOpacity>
             </View>
 
-            {/* Location Section */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Location</Text>
-              
-              <TouchableOpacity 
-                style={[styles.option, { borderBottomColor: colors.border }]}
-                onPress={() => setLocationModalVisible(true)}
-              >
-                <View style={styles.optionLeft}>
-                  <MapPin size={20} color={colors.primary} />
-                  <Text style={[styles.optionText, { color: colors.text }]}>
-                    {getCurrentLocationName()}
-                  </Text>
-                </View>
-                <ChevronRight size={20} color={colors.secondary} />
-              </TouchableOpacity>
-            </View>
+            {/* Location Section - Only show if enabled in config */}
+            {Config.UI.SHOW_LOCATION_SETTING && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Location</Text>
+                
+                <TouchableOpacity 
+                  style={[styles.option, { borderBottomColor: colors.border }]}
+                  onPress={() => setLocationModalVisible(true)}
+                >
+                  <View style={styles.optionLeft}>
+                    <MapPin size={20} color={colors.primary} />
+                    <Text style={[styles.optionText, { color: colors.text }]}>
+                      {getCurrentLocationName()}
+                    </Text>
+                  </View>
+                  <ChevronRight size={20} color={colors.secondary} />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Theme Section */}
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Appearance</Text>
               
-              {/* Light Mode Option */}
-              <TouchableOpacity 
-                style={[styles.option, { borderBottomColor: colors.border }]}
-                onPress={() => theme !== 'light' && toggleTheme()}
-              >
+              {/* Theme Toggle */}
+              <View style={[styles.option, { borderBottomColor: colors.border }]}>
                 <View style={styles.optionLeft}>
-                  <Sun size={20} color={theme === 'light' ? colors.primary : colors.secondary} />
-                  <Text style={[styles.optionText, { color: colors.text }]}>Light Mode</Text>
+                  {theme === 'dark' ? (
+                    <Moon size={20} color={colors.primary} />
+                  ) : (
+                    <Sun size={20} color={colors.primary} />
+                  )}
+                  <Text style={[styles.optionText, { color: colors.text }]}>
+                    {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                  </Text>
                 </View>
-                <Switch
-                  value={theme === 'light'}
-                  onValueChange={(value) => {
-                    if (value && theme !== 'light') {
-                      toggleTheme();
+                <TouchableOpacity
+                  style={[
+                    styles.themeToggle,
+                    {
+                      backgroundColor: theme === 'dark' ? colors.primary : colors.border,
+                      borderColor: colors.border,
                     }
-                  }}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor="#FFFFFF"
-                />
-              </TouchableOpacity>
-
-              {/* Dark Mode Option */}
-              <TouchableOpacity 
-                style={[styles.option, { borderBottomColor: colors.border }]}
-                onPress={() => theme !== 'dark' && toggleTheme()}
-              >
-                <View style={styles.optionLeft}>
-                  <Moon size={20} color={theme === 'dark' ? colors.primary : colors.secondary} />
-                  <Text style={[styles.optionText, { color: colors.text }]}>Dark Mode</Text>
-                </View>
-                <Switch
-                  value={theme === 'dark'}
-                  onValueChange={(value) => {
-                    if (value && theme !== 'dark') {
-                      toggleTheme();
-                    }
-                  }}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor="#FFFFFF"
-                />
-              </TouchableOpacity>
+                  ]}
+                  onPress={toggleTheme}
+                >
+                  <View
+                    style={[
+                      styles.themeToggleThumb,
+                      {
+                        backgroundColor: '#FFFFFF',
+                        transform: [{ translateX: theme === 'dark' ? 20 : 0 }],
+                      }
+                    ]}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Debug Section - Only show if enabled in config */}
@@ -448,5 +442,19 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  themeToggle: {
+    width: 40,
+    height: 20,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  themeToggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fff',
   },
 });
