@@ -1,6 +1,6 @@
-# TeleInstaNews App
+# DailySnapShorts App
 
-A modern news application with multi-language support and location-based content filtering.
+A modern news application focused on delivering concise, engaging news snippets with multi-language support and location-based content filtering.
 
 ## Features
 
