@@ -257,7 +257,7 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>About</Text>
               <View style={[styles.option, { borderBottomColor: 'transparent' }]}>
-                <Text style={[styles.optionText, { color: colors.secondary }]}>TeleInstaNews v1.0.0</Text>
+                <Text style={[styles.optionText, { color: colors.secondary }]}>DailySnapShorts v1.0.0</Text>
               </View>
             </View>
           </ScrollView>

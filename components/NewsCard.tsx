@@ -163,16 +163,31 @@ const createStyles = (colors: any) => StyleSheet.create({
   sourceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: colors.primary,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 15,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
   },
   sourceText: {
-    color: 'white',
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'Inter-SemiBold',
     marginLeft: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   // Share Icon - positioned on the right
   shareIconContainer: {

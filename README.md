@@ -66,7 +66,7 @@ The app uses a modern database schema with separate tables for articles and tran
 1. **Clone the repository**
 ```bash
 git clone <repository-url>
-   cd tele-insta-news-app
+   cd DailySnapShorts
    ```
 
 2. **Install dependencies**
