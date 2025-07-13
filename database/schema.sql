@@ -21,7 +21,8 @@ CREATE TABLE app_config (
 
 CREATE TABLE location_config (
     id SERIAL PRIMARY KEY,
-    location_name VARCHAR(100) NOT NULL,
+    location_name VARCHAR(255) NOT NULL,
+    short_name VARCHAR(10) NOT NULL,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -60,7 +61,8 @@ CREATE TABLE news_article (
     published_at TIMESTAMP NOT NULL,
     schedule_run_id INTEGER REFERENCES schedule_run(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_article_url UNIQUE (article_url)
 );
 
 CREATE TABLE news_article_translation (
@@ -115,19 +117,80 @@ CREATE INDEX idx_news_article_translation_language ON news_article_translation(l
 CREATE INDEX idx_news_article_translation_published_at ON news_article_translation(published_at);
 CREATE INDEX idx_news_article_translation_history_archived_at ON news_article_translation_history(archived_at);
 
--- Insert default configurations
-INSERT INTO app_config (config_key, config_value, description) VALUES
-('NEWS_COUNT_PER_LOCATION', '20', 'Number of trending news articles to generate per location'),
-('NEWS_UNIQUENESS_HOURS', '1', 'Number of hours to check for uniqueness'),
-('ARCHIVE_DAYS_THRESHOLD', '30', 'Number of days after which news articles should be archived'),
+DROP TABLE IF EXISTS user_preferences cascade;
+
+-- Create user_preferences table
+CREATE TABLE user_preferences (
+    id SERIAL PRIMARY KEY,
+    device_id VARCHAR(255) NOT NULL,
+    push_token VARCHAR(255),
+    notifications_enabled BOOLEAN DEFAULT true,
+    language_code VARCHAR(2) REFERENCES language_config(code),
+    last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_device_id UNIQUE (device_id)
+);
+
+-- Create indexes for user_preferences
+CREATE INDEX idx_user_preferences_device_id ON user_preferences(device_id);
+CREATE INDEX idx_user_preferences_push_token ON user_preferences(push_token);
+CREATE INDEX idx_user_preferences_language ON user_preferences(language_code);
+CREATE INDEX idx_user_preferences_last_active ON user_preferences(last_active_at);
+
+
+DROP TABLE IF EXISTS notification_status cascade;
+
+-- Create notification status table (single row)
+CREATE TABLE notification_status (
+    id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- Ensures only one row
+    -- Article and Translation Information
+    last_notified_article_id INTEGER REFERENCES news_article(id),
+    notified_translation_ids INTEGER[] NOT NULL DEFAULT '{}', -- Array of news_article_translation ids that were sent
+    -- Notification Details
+    notification_title TEXT,
+    notification_body TEXT,
+    -- Recipients Information
+    notified_user_preference_ids INTEGER[] NOT NULL DEFAULT '{}', -- Array of user_preferences ids that were notified
+    total_recipients_count INTEGER DEFAULT 0,
+    successful_recipients_count INTEGER DEFAULT 0,
+    failed_recipients_count INTEGER DEFAULT 0,
+    -- Expo API Response Summary
+    expo_success_tickets TEXT[] DEFAULT '{}', -- Array of successful ticket IDs
+    expo_failed_tickets JSONB, -- Detailed error information for failed tickets
+    -- Status Information
+    notification_status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'in_progress', 'completed', 'failed'
+    error_message TEXT,
+    -- Timing Information
+    last_notification_start_time TIMESTAMP,
+    last_notification_end_time TIMESTAMP,
+    -- Common fields
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for monitoring
+CREATE INDEX idx_notification_status_article ON notification_status(last_notified_article_id);
+CREATE INDEX idx_notification_status_updated ON notification_status(updated_at);
+
+
+-- Insert default configuration values
+INSERT INTO app_config (config_key, config_value, description) VALUES 
+('NEWS_COUNT_PER_LOCATION', '10', 'Number of news articles to generate per location'),
+('NEWS_UNIQUENESS_HOURS', '1', 'Hours to check for uniqueness of news articles'),
+('ARCHIVE_DAYS_THRESHOLD', '30', 'Number of days after which articles should be archived'),
 ('HISTORY_CLEANUP_DAYS_THRESHOLD', '30', 'Number of days after which history records should be cleaned up'),
 ('OPENAI_MODEL', 'gpt-3.5-turbo', 'OpenAI model to use for news generation'),
-('SCHEDULER_INTERVAL_MINUTES', '15', 'Interval in minutes for the news generation scheduler'),
-('NEWS_GENERATION_ENABLED', 'true', 'Enable or disable automatic news generation scheduler');
+('SCHEDULER_INTERVAL_MINUTES', '15', 'Interval in minutes between news generation runs'),
+('NEWS_GENERATION_ENABLED', 'true', 'Enable or disable automatic news generation scheduler'),
+('RETRY_ENABLED', 'true', 'Enable or disable retry mechanism for failed operations'),
+('MAX_RETRY_ATTEMPTS', '3', 'Maximum number of retry attempts for failed operations')
+ON CONFLICT ON CONSTRAINT uk_config_key DO NOTHING;
 
 -- Insert Singapore location
-INSERT INTO location_config (location_name, is_active) VALUES
-('Singapore', true);
+INSERT INTO location_config (location_name, short_name, is_active) VALUES 
+('Singapore', 'sg', true)
+ON CONFLICT ON CONSTRAINT uk_location_name DO NOTHING;
 
 INSERT INTO language_config (code, name, native_name, short_name) VALUES
   ('en', 'English', 'English', 'EN'),

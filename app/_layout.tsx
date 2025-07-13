@@ -52,9 +52,9 @@ export default function RootLayout() {
   }
 
   return (
-    <NotificationProvider>
-      <ThemeProvider>
-        <SettingsProvider>
+    <ThemeProvider>
+      <SettingsProvider>
+        <NotificationProvider>
           <NewsProvider>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
@@ -62,8 +62,8 @@ export default function RootLayout() {
             </Stack>
             <StatusBar style="auto" />
           </NewsProvider>
-        </SettingsProvider>
-      </ThemeProvider>
-    </NotificationProvider>
+        </NotificationProvider>
+      </SettingsProvider>
+    </ThemeProvider>
   );
 }

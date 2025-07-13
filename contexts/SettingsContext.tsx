@@ -3,6 +3,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppSettings, LanguageConfig, LocationConfig } from '@/types/news.types';
 import { supabaseService } from '@/services/supabaseService';
 import { locationService } from '@/services/locationService';
+import * as Device from 'expo-device';
+
+interface UserPreferences {
+  id: number;
+  device_id: string;
+  push_token: string | null;
+  notifications_enabled: boolean;
+  language_code: string | null;
+  last_active_at: string;
+}
 
 interface SettingsState {
   language: string;
@@ -12,6 +22,8 @@ interface SettingsState {
   loading: boolean;
   error: string | null;
   initialized: boolean;
+  userPreferences: UserPreferences | null;
+  deviceId: string;
 }
 
 interface SettingsContextType {
@@ -21,6 +33,7 @@ interface SettingsContextType {
   loadLanguages: () => Promise<void>;
   loadLocations: () => Promise<void>;
   initializeSettings: () => Promise<void>;
+  updateUserPreferences: (preferences: Partial<UserPreferences>) => Promise<void>;
 }
 
 type SettingsAction =
@@ -30,7 +43,9 @@ type SettingsAction =
   | { type: 'SET_LOCATIONS'; payload: LocationConfig[] }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'SET_INITIALIZED'; payload: boolean };
+  | { type: 'SET_INITIALIZED'; payload: boolean }
+  | { type: 'SET_USER_PREFERENCES'; payload: UserPreferences | null }
+  | { type: 'SET_DEVICE_ID'; payload: string };
 
 const initialState: SettingsState = {
   language: 'en',
@@ -40,6 +55,8 @@ const initialState: SettingsState = {
   loading: false,
   error: null,
   initialized: false,
+  userPreferences: null,
+  deviceId: Device.deviceName || Device.modelName || 'unknown_device',
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -60,6 +77,10 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
       return { ...state, error: action.payload };
     case 'SET_INITIALIZED':
       return { ...state, initialized: action.payload };
+    case 'SET_USER_PREFERENCES':
+      return { ...state, userPreferences: action.payload };
+    case 'SET_DEVICE_ID':
+      return { ...state, deviceId: action.payload };
     default:
       return state;
   }
@@ -72,10 +93,27 @@ interface SettingsProviderProps {
 export function SettingsProvider({ children }: SettingsProviderProps) {
   const [state, dispatch] = useReducer(settingsReducer, initialState);
 
+  const updateUserPreferences = async (preferences: Partial<UserPreferences>) => {
+    try {
+      const updatedPrefs = await supabaseService.upsertUserPreferences(state.deviceId, {
+        ...preferences,
+        language_code: state.language,
+      });
+      dispatch({ type: 'SET_USER_PREFERENCES', payload: updatedPrefs });
+    } catch (error) {
+      console.error('Failed to update user preferences:', error);
+      throw error;
+    }
+  };
+
   const setLanguage = async (language: string) => {
     dispatch({ type: 'SET_LANGUAGE', payload: language });
     try {
       await AsyncStorage.setItem('app_language', language);
+      // Update language in user preferences if we have them
+      if (state.userPreferences) {
+        await updateUserPreferences({ language_code: language });
+      }
     } catch (error) {
       console.error('Failed to save language setting:', error);
     }
@@ -121,8 +159,12 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      // Load saved settings first
-      const savedLanguage = await AsyncStorage.getItem('app_language');
+      // First, try to get existing user preferences
+      const prefs = await supabaseService.getUserPreferences(state.deviceId);
+      dispatch({ type: 'SET_USER_PREFERENCES', payload: prefs });
+
+      // Load saved settings
+      const savedLanguage = prefs?.language_code || await AsyncStorage.getItem('app_language');
       const savedLocation = await AsyncStorage.getItem('app_location');
 
       if (savedLanguage) {
@@ -147,14 +189,21 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
           }
         } catch (error) {
           console.warn('Failed to detect user location, using default:', error);
-          // Keep the default 'all' location
         }
+      }
+
+      // If we don't have user preferences yet, create them
+      if (!prefs) {
+        const newPrefs = await supabaseService.upsertUserPreferences(state.deviceId, {
+          language_code: savedLanguage || 'en',
+          notifications_enabled: true,
+        });
+        dispatch({ type: 'SET_USER_PREFERENCES', payload: newPrefs });
       }
 
       dispatch({ type: 'SET_INITIALIZED', payload: true });
     } catch (error) {
       console.error('Failed to initialize settings:', error);
-      // Even if initialization fails, mark as initialized to prevent infinite loading
       dispatch({ type: 'SET_INITIALIZED', payload: true });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -174,6 +223,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         loadLanguages,
         loadLocations,
         initializeSettings,
+        updateUserPreferences,
       }}
     >
       {children}

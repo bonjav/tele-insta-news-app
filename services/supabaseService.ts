@@ -47,6 +47,17 @@ export interface DatabaseLocationConfig {
   updated_at: string;
 }
 
+export interface UserPreferences {
+  id: number;
+  device_id: string;
+  push_token: string | null;
+  notifications_enabled: boolean;
+  language_code: string | null;
+  last_active_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 class SupabaseService {
   private client: SupabaseClient | null = null;
 
@@ -288,6 +299,90 @@ class SupabaseService {
       return count || 0;
     } catch (error) {
       console.error('Failed to get article count:', error);
+      throw error;
+    }
+  }
+
+  // User preferences methods
+  async getUserPreferences(deviceId: string): Promise<UserPreferences | null> {
+    if (!this.isClientReady()) {
+      throw new Error('Supabase client not ready');
+    }
+
+    try {
+      const { data, error } = await this.client!
+        .from('user_preferences')
+        .select('*')
+        .eq('device_id', deviceId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') { // Record not found
+          return null;
+        }
+        console.error('Error fetching user preferences:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch user preferences:', error);
+      throw error;
+    }
+  }
+
+  async upsertUserPreferences(
+    deviceId: string,
+    preferences: Partial<UserPreferences>
+  ): Promise<UserPreferences> {
+    if (!this.isClientReady()) {
+      throw new Error('Supabase client not ready');
+    }
+
+    try {
+      // Always update last_active_at
+      const updatedPreferences = {
+        ...preferences,
+        device_id: deviceId,
+        last_active_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await this.client!
+        .from('user_preferences')
+        .upsert(updatedPreferences)
+        .eq('device_id', deviceId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error upserting user preferences:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Failed to upsert user preferences:', error);
+      throw error;
+    }
+  }
+
+  async updateUserActivity(deviceId: string): Promise<void> {
+    if (!this.isClientReady()) {
+      throw new Error('Supabase client not ready');
+    }
+
+    try {
+      const { error } = await this.client!
+        .from('user_preferences')
+        .update({ last_active_at: new Date().toISOString() })
+        .eq('device_id', deviceId);
+
+      if (error) {
+        console.error('Error updating user activity:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Failed to update user activity:', error);
       throw error;
     }
   }

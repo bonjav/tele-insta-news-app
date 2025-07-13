@@ -12,10 +12,11 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, Moon, Sun, Globe, MapPin, ChevronRight, Bug } from 'lucide-react-native';
+import { X, Moon, Sun, Globe, MapPin, ChevronRight, Bug, Bell } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useNews } from '@/contexts/NewsContext';
+import { useNotification } from '@/contexts/NotificationContext';
 import { Config } from '@/constants/Config';
 import DebugPanel from './DebugPanel';
 
@@ -98,6 +99,7 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
   const { theme, colors, toggleTheme } = useTheme();
   const { state: settingsState, setLanguage, setLocation } = useSettings();
   const { refreshNews } = useNews();
+  const { notificationsEnabled, toggleNotifications } = useNotification();
   
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
@@ -156,8 +158,27 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
             </TouchableOpacity>
           </View>
 
-          {/* Settings Content */}
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* Notifications Section */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Notifications</Text>
+              
+              <View style={[styles.option, { borderBottomColor: colors.border }]}>
+                <View style={styles.optionLeft}>
+                  <Bell size={20} color={colors.primary} />
+                  <Text style={[styles.optionText, { color: colors.text }]}>
+                    Enable Notifications
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={toggleNotifications}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : notificationsEnabled ? '#FFFFFF' : '#F4F3F4'}
+                />
+              </View>
+            </View>
+
             {/* Language Section */}
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Language</Text>
@@ -352,7 +373,7 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 4,
   },
-  content: {
+  scrollContent: {
     flex: 1,
     padding: 20,
   },
