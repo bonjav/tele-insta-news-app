@@ -3,11 +3,14 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert } from 'reac
 import { useTheme } from '@/contexts/ThemeContext';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useNews } from '@/contexts/NewsContext';
+import { useSettings } from '@/contexts/SettingsContext';
+import { locationService } from '@/services/locationService';
 
 export default function DebugPanel() {
   const { colors } = useTheme();
   const { testNotificationTap } = useNotifications();
   const { state } = useNews();
+  const { state: settingsState } = useSettings();
   const [testArticleId, setTestArticleId] = useState('');
 
   const handleTestNotification = async () => {
@@ -34,10 +37,60 @@ export default function DebugPanel() {
     }
   };
 
+  const handleTestLocationDetection = async () => {
+    try {
+      console.log('Starting location detection test from debug panel...');
+      await locationService.debugLocationDetection();
+      Alert.alert('Location Test', 'Location detection test completed. Check console for results.');
+    } catch (error) {
+      console.error('Location detection test error:', error);
+      Alert.alert('Error', 'Failed to test location detection');
+    }
+  };
+
+  const handleClearLocationCache = async () => {
+    try {
+      locationService.clearCache();
+      Alert.alert('Cache Cleared', 'Location cache has been cleared');
+    } catch (error) {
+      console.error('Clear cache error:', error);
+      Alert.alert('Error', 'Failed to clear location cache');
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
       <Text style={[styles.title, { color: colors.text }]}>Debug Panel</Text>
       
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Location Detection</Text>
+        
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: colors.primary }]}
+          onPress={handleTestLocationDetection}
+        >
+          <Text style={[styles.buttonText, { color: colors.background }]}>
+            Test Location Detection
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: colors.secondary }]}
+          onPress={handleClearLocationCache}
+        >
+          <Text style={[styles.buttonText, { color: colors.background }]}>
+            Clear Location Cache
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={[styles.infoText, { color: colors.secondary }]}>
+          Detected Country: {settingsState.actualCountry?.countryName || 'None'}
+        </Text>
+        <Text style={[styles.infoText, { color: colors.secondary }]}>
+          Current Location: {settingsState.location || 'Not set'}
+        </Text>
+      </View>
+
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Test Notification Tap</Text>
         

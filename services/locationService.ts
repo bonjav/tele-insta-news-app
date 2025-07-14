@@ -28,16 +28,21 @@ class LocationService {
         locale = NativeModules?.I18nManager?.localeIdentifier;
       }
 
+      console.log('Detected locale:', locale);
+
       if (locale) {
         const parts = locale.split(/[-_]/);
+        console.log('Locale parts:', parts);
+        
         if (parts.length >= 2) {
           const countryCode = parts[1].toUpperCase();
           const countryName = this.getCountryName(countryCode);
+          console.log('Extracted country code:', countryCode, 'Country name:', countryName);
           return { countryCode, countryName };
         }
       }
     } catch (error) {
-      console.warn('Failed to get country from locale:', error);
+      console.error('Failed to get country from locale:', error);
     }
     return null;
   }
@@ -151,30 +156,41 @@ class LocationService {
   // Get country from geolocation
   private async getCountryFromGeolocation(): Promise<CountryInfo | null> {
     try {
+      console.log('Requesting location permissions...');
       const { status } = await Location.requestForegroundPermissionsAsync();
+      console.log('Location permission status:', status);
+      
       if (status !== 'granted') {
+        console.warn('Location permission not granted');
         return null;
       }
 
+      console.log('Getting current position...');
       const location = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
+      console.log('Current position:', { latitude, longitude });
 
       // Use reverse geocoding to get country
+      console.log('Performing reverse geocoding...');
       const geocode = await Location.reverseGeocodeAsync({
         latitude,
         longitude,
       });
 
+      console.log('Reverse geocoding results:', geocode);
+
       if (geocode.length > 0) {
         const countryCode = geocode[0].isoCountryCode;
         const countryName = geocode[0].country;
+        
+        console.log('Extracted from geocoding - Country code:', countryCode, 'Country name:', countryName);
         
         if (countryCode && countryName) {
           return { countryCode, countryName };
         }
       }
     } catch (error) {
-      console.warn('Failed to get country from geolocation:', error);
+      console.error('Failed to get country from geolocation:', error);
     }
     return null;
   }
@@ -182,22 +198,69 @@ class LocationService {
   // Get user's country
   async getUserCountry(): Promise<CountryInfo | null> {
     if (this.cachedCountry) {
+      console.log('Using cached country:', this.cachedCountry);
       return this.cachedCountry;
     }
 
+    console.log('No cached country, attempting detection...');
+
     // Try geolocation first
+    console.log('Attempting geolocation-based country detection...');
     let country = await this.getCountryFromGeolocation();
     
-    // Fallback to locale
-    if (!country) {
+    if (country) {
+      console.log('Successfully detected country via geolocation:', country);
+    } else {
+      console.log('Geolocation detection failed, trying locale-based detection...');
+      
+      // Fallback to locale
       country = this.getCountryFromLocale();
+      
+      if (country) {
+        console.log('Successfully detected country via locale:', country);
+      } else {
+        console.log('Both geolocation and locale detection failed');
+      }
     }
 
     if (country) {
+      console.log('Caching detected country:', country);
       this.cachedCountry = country;
     }
 
     return country;
+  }
+
+  // Clear cached country (for testing)
+  clearCache(): void {
+    console.log('Clearing cached country');
+    this.cachedCountry = null;
+  }
+
+  // Debug method to test location detection
+  async debugLocationDetection(): Promise<void> {
+    console.log('=== DEBUG: Starting location detection test ===');
+    
+    // Clear cache first
+    this.clearCache();
+    
+    // Test geolocation detection
+    console.log('--- Testing geolocation detection ---');
+    const geoCountry = await this.getCountryFromGeolocation();
+    console.log('Geolocation result:', geoCountry);
+    
+    // Test locale detection
+    console.log('--- Testing locale detection ---');
+    const localeCountry = this.getCountryFromLocale();
+    console.log('Locale result:', localeCountry);
+    
+    // Test the full getUserCountry method
+    console.log('--- Testing full getUserCountry method ---');
+    this.clearCache(); // Clear cache to force fresh detection
+    const finalCountry = await this.getUserCountry();
+    console.log('Final result:', finalCountry);
+    
+    console.log('=== DEBUG: Location detection test completed ===');
   }
 
   // Check if a country is in the available locations

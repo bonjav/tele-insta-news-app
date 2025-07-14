@@ -167,14 +167,18 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
   const detectUserCountry = async () => {
     try {
+      console.log('Starting country detection...');
       const userCountry = await locationService.getUserCountry();
       if (userCountry) {
+        console.log('Successfully detected user country:', userCountry);
         dispatch({ type: 'SET_ACTUAL_COUNTRY', payload: userCountry });
         await AsyncStorage.setItem('user_actual_country', JSON.stringify(userCountry));
         return userCountry;
+      } else {
+        console.warn('No country detected by location service');
       }
     } catch (error) {
-      console.warn('Failed to detect user country:', error);
+      console.error('Failed to detect user country:', error);
     }
     return null;
   };
@@ -184,8 +188,27 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      // Load available languages and locations first
-      await Promise.allSettled([loadLanguages(), loadLocations()]);
+      // Load available languages and locations first and wait for them to complete
+      console.log('Loading languages and locations...');
+      const [languagesResult, locationsResult] = await Promise.allSettled([
+        loadLanguages(), 
+        loadLocations()
+      ]);
+
+      // Check if locations loaded successfully
+      let availableLocations: LocationConfig[] = [];
+      if (locationsResult.status === 'fulfilled') {
+        // Get locations from the database directly since state might not be updated yet
+        try {
+          availableLocations = await supabaseService.getLocations();
+          console.log('Available locations:', availableLocations.map(loc => loc.locationName));
+        } catch (error) {
+          console.error('Failed to get locations for country detection:', error);
+          availableLocations = [];
+        }
+      } else {
+        console.error('Failed to load locations:', locationsResult.reason);
+      }
 
       // First, try to get existing user preferences
       const prefs = await supabaseService.getUserPreferences(state.deviceId);
@@ -197,7 +220,16 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
       // Try to get the actual country from storage or detect it
       const savedActualCountry = await AsyncStorage.getItem('user_actual_country');
-      const actualCountry = savedActualCountry ? JSON.parse(savedActualCountry) : await detectUserCountry();
+      let actualCountry = null;
+      
+      if (savedActualCountry) {
+        actualCountry = JSON.parse(savedActualCountry);
+        console.log('Using saved actual country:', actualCountry);
+      } else {
+        console.log('Detecting user country...');
+        actualCountry = await detectUserCountry();
+        console.log('Detected country:', actualCountry);
+      }
       
       if (actualCountry) {
         dispatch({ type: 'SET_ACTUAL_COUNTRY', payload: actualCountry });
@@ -214,13 +246,16 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       // If no saved location, try to use the actual country if it's supported
       if (!savedLocation) {
         try {
-          const availableLocationNames = state.locations.map(loc => loc.locationName);
+          const availableLocationNames = availableLocations.map(loc => loc.locationName);
+          console.log('Available location names:', availableLocationNames);
           
           // Only set location if the actual country is in our supported locations
           if (actualCountry && availableLocationNames.includes(actualCountry.countryName)) {
+            console.log('Setting location to detected country:', actualCountry.countryName);
             dispatch({ type: 'SET_LOCATION', payload: actualCountry.countryName });
             await AsyncStorage.setItem('app_location', actualCountry.countryName);
           } else {
+            console.log('Detected country not in supported locations or no country detected');
             // Otherwise keep it as null
             dispatch({ type: 'SET_LOCATION', payload: null });
             await AsyncStorage.setItem('app_location', '');
@@ -249,6 +284,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       }
 
       dispatch({ type: 'SET_INITIALIZED', payload: true });
+      console.log('Settings initialization completed');
     } catch (error) {
       console.error('Failed to initialize settings:', error);
       dispatch({ type: 'SET_INITIALIZED', payload: true });
