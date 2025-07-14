@@ -40,7 +40,7 @@ interface SettingsContextType {
 
 type SettingsAction =
   | { type: 'SET_LANGUAGE'; payload: string }
-  | { type: 'SET_LOCATION'; payload: string }
+  | { type: 'SET_LOCATION'; payload: string | null }
   | { type: 'SET_LANGUAGES'; payload: LanguageConfig[] }
   | { type: 'SET_LOCATIONS'; payload: LocationConfig[] }
   | { type: 'SET_LOADING'; payload: boolean }
