@@ -31,6 +31,7 @@ export interface NewsState {
   selectedLanguage: string;
   selectedLocation: string;
   totalArticlesCount: number;
+  shouldScrollToTop: boolean;
 }
 
 export interface StoredNewsData {

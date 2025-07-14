@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import {
   View,
   FlatList,
@@ -22,7 +22,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function NewsScreen() {
   const {
-    state: { articles, loading, error, refreshing, currentIndex },
+    state: { articles, loading, error, refreshing, currentIndex, shouldScrollToTop },
     dispatch,
     refreshNews,
     loadMoreNews,
@@ -33,6 +33,34 @@ export default function NewsScreen() {
   const flatListRef = useRef<FlatList>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isLoadingPrevious, setIsLoadingPrevious] = useState(false);
+
+  // Handle scrolling to specific article from notification
+  useEffect(() => {
+    if (shouldScrollToTop && flatListRef.current && articles.length > 0) {
+      console.log('Scrolling to article at index:', currentIndex, 'of', articles.length);
+      
+      // Use setTimeout to ensure the FlatList has rendered the new articles
+      setTimeout(() => {
+        try {
+          if (currentIndex >= 0 && currentIndex < articles.length) {
+            flatListRef.current?.scrollToIndex({
+              index: currentIndex,
+              animated: true,
+            });
+            console.log('Successfully scrolled to index:', currentIndex);
+          } else {
+            console.warn('Invalid currentIndex:', currentIndex, 'for articles length:', articles.length);
+          }
+        } catch (error) {
+          console.error('Error scrolling to index:', error);
+          // Fallback to scrolling to top
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        }
+        // Clear the flag after scrolling
+        dispatch({ type: 'CLEAR_SPECIFIC_ARTICLE_FLAG' });
+      }, 100);
+    }
+  }, [shouldScrollToTop, currentIndex, articles.length, dispatch]);
 
   const handleViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {

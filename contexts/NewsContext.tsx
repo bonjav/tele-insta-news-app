@@ -21,6 +21,7 @@ type NewsAction =
   | { type: 'SET_LANGUAGE'; payload: string }
   | { type: 'SET_LOCATION'; payload: string | null }
   | { type: 'SET_SPECIFIC_ARTICLE'; payload: NewsArticle }
+  | { type: 'CLEAR_SPECIFIC_ARTICLE_FLAG' }
   | { type: 'REMOVE_OLD_ARTICLES'; payload: number }
   | { type: 'RESET_STATE' };
 
@@ -33,6 +34,7 @@ const initialState: NewsState = {
   selectedLanguage: 'en',
   selectedLocation: null,
   totalArticlesCount: 0,
+  shouldScrollToTop: false,
 };
 
 const NewsContext = createContext<NewsContextType | undefined>(undefined);
@@ -67,10 +69,19 @@ function newsReducer(state: NewsState, action: NewsAction): NewsState {
         return {
           ...state,
           articles: [action.payload, ...state.articles],
-          currentIndex: 0
+          currentIndex: 0,
+          shouldScrollToTop: true
         };
       }
-      return state;
+      // If article exists, just set it as current and scroll to it
+      const existingIndex = state.articles.findIndex(article => article.id === action.payload.id);
+      return {
+        ...state,
+        currentIndex: existingIndex,
+        shouldScrollToTop: true
+      };
+    case 'CLEAR_SPECIFIC_ARTICLE_FLAG':
+      return { ...state, shouldScrollToTop: false };
     case 'REMOVE_OLD_ARTICLES':
       return {
         ...state,

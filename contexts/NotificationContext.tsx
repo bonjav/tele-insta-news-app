@@ -26,6 +26,7 @@ interface NotificationContextType {
   error: Error | null;
   notificationsEnabled: boolean;
   toggleNotifications: () => Promise<void>;
+  testNotificationTap: (articleId: number) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -65,6 +66,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     });
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(async response => {
+      console.log('Notification response received:', response);
+      
       const data = response.notification.request.content.data as { 
         articleId: number;
         location: string;
@@ -73,18 +76,24 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         notificationId: string;
       };
       
+      console.log('Notification data:', data);
+      
       if (data.articleId) {
         try {
+          console.log('Looking for article with ID:', data.articleId);
+          
           // First try to find the article in local storage
           const localArticle = await StorageService.findArticleById(data.articleId);
           
           if (localArticle) {
+            console.log('Found article in local storage:', localArticle.title);
             // If found in local storage, display it immediately
             dispatch({ 
               type: 'SET_SPECIFIC_ARTICLE', 
               payload: localArticle 
             });
           } else {
+            console.log('Article not found in local storage, refreshing news...');
             // If not found in local storage, refresh the news data
             await refreshNews(
               settingsState.language || 'en',
@@ -94,18 +103,24 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             // After refresh, try to find the article again
             const refreshedArticle = await StorageService.findArticleById(data.articleId);
             if (refreshedArticle) {
+              console.log('Found article after refresh:', refreshedArticle.title);
               dispatch({ 
                 type: 'SET_SPECIFIC_ARTICLE', 
                 payload: refreshedArticle 
               });
+            } else {
+              console.warn('Article not found even after refresh. ArticleId:', data.articleId);
             }
           }
           
           // Navigate to the news screen
+          console.log('Navigating to home screen...');
           router.push('/');
         } catch (error) {
           console.error('Error handling notification tap:', error);
         }
+      } else {
+        console.warn('No articleId in notification data');
       }
     });
 
@@ -199,6 +214,49 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const testNotificationTap = async (articleId: number) => {
+    console.log('Testing notification tap for article ID:', articleId);
+    
+    try {
+      // First try to find the article in local storage
+      const localArticle = await StorageService.findArticleById(articleId);
+      
+      if (localArticle) {
+        console.log('Found article in local storage:', localArticle.title);
+        // If found in local storage, display it immediately
+        dispatch({ 
+          type: 'SET_SPECIFIC_ARTICLE', 
+          payload: localArticle 
+        });
+      } else {
+        console.log('Article not found in local storage, refreshing news...');
+        // If not found in local storage, refresh the news data
+        await refreshNews(
+          settingsState.language || 'en',
+          settingsState.location // Pass location directly, it will be null if not specified
+        );
+        
+        // After refresh, try to find the article again
+        const refreshedArticle = await StorageService.findArticleById(articleId);
+        if (refreshedArticle) {
+          console.log('Found article after refresh:', refreshedArticle.title);
+          dispatch({ 
+            type: 'SET_SPECIFIC_ARTICLE', 
+            payload: refreshedArticle 
+          });
+        } else {
+          console.warn('Article not found even after refresh. ArticleId:', articleId);
+        }
+      }
+      
+      // Navigate to the news screen
+      console.log('Navigating to home screen...');
+      router.push('/');
+    } catch (error) {
+      console.error('Error testing notification tap:', error);
+    }
+  };
+
   return (
     <NotificationContext.Provider
       value={{
@@ -207,6 +265,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         error,
         notificationsEnabled,
         toggleNotifications,
+        testNotificationTap,
       }}
     >
       {children}
