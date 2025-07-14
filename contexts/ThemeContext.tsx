@@ -25,7 +25,7 @@ const lightColors: ThemeColors = {
   text: '#000000',
   cardBackground: '#FFFFFF',
   border: '#E5E5EA',
-  primary: '#007AFF',
+  primary: '#FFA930',
   secondary: '#333333',
   overlay: 'rgba(0, 0, 0, 0.4)',
 };
@@ -35,7 +35,7 @@ const darkColors: ThemeColors = {
   text: '#FFFFFF',
   cardBackground: '#1C1C1E',
   border: '#38383A',
-  primary: '#0A84FF',
+  primary: '#FFA930',
   secondary: '#CCCCCC',
   overlay: 'rgba(255, 255, 255, 0.1)',
 };

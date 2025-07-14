@@ -13,6 +13,7 @@ import {
   ShareContent,
 } from 'react-native';
 import { ExternalLink, Share2, User } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NewsArticle } from '@/types/news.types';
 import { useTheme } from '@/contexts/ThemeContext';
 import * as FileSystem from 'expo-file-system';
@@ -96,8 +97,8 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
   const styles = createStyles(colors);
 
   return (
-    <View style={styles.container}>
-      {/* Image Section - 35% of screen */}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Image Section - Full top portion */}
       <View style={styles.imageSection}>
         {!imageError && article.image ? (
           <Image
@@ -112,8 +113,7 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
           </View>
         )}
         
-        {/* Empty Image Overlay - keeping the gradient effect */}
-        <View style={styles.imageOverlay} />
+
       </View>
 
       {/* Description Section - expanded */}
@@ -142,16 +142,13 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
       </View>
 
       {/* Link Section - positioned just above bottom bar */}
+      <View style={styles.linkSection}>
         <TouchableOpacity style={styles.readMoreButton} onPress={handleOpenLink}>
           <ExternalLink size={18} color={colors.primary} />
           <Text style={styles.readMoreText}>View Full Article at {article.source.name}</Text>
         </TouchableOpacity>
-
-      {/* Swipe Indicators */}
-      <View style={styles.swipeIndicator}>
-        <Text style={styles.indicatorText}>↑ Swipe up for next</Text>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -161,9 +158,9 @@ const createStyles = (colors: any) => StyleSheet.create({
     height: SCREEN_HEIGHT,
     backgroundColor: colors.background,
   },
-  // Image Section - 35% of screen
+  // Image Section - Reduced from bottom to give more text space
   imageSection: {
-    height: SCREEN_HEIGHT * 0.35,
+    height: SCREEN_HEIGHT * 0.40,
     width: '100%',
     position: 'relative',
   },
@@ -182,14 +179,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: 60,
     opacity: 0.5,
   },
-  imageOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
+
   metaContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
@@ -253,7 +243,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     padding: 20,
     justifyContent: 'flex-start',
-    paddingBottom: 100, // Space for link section above bottom bar
+    paddingBottom: 80, // Adjusted for thinner bottom bar (50px + gap)
   },
   headerContainer: {
     flexDirection: 'row',
@@ -312,16 +302,30 @@ const createStyles = (colors: any) => StyleSheet.create({
   // Link Section - positioned just above bottom bar
   linkSection: {
     position: 'absolute',
-    bottom: 110, // Just above the 60px bottom bar with small gap
+    bottom: 60, // Adjusted for thinner bottom bar (50px + 10px gap)
     left: 0,
     right: 0,
-    height: 60,
+    height: 50,
     paddingHorizontal: 20,
     justifyContent: 'center',
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    zIndex: 10, // Ensure it's clickable above other elements
+    zIndex: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 -1px 4px rgba(0, 0, 0, 0.1)',
+      },
+    }),
   },
   readMoreButton: {
     flexDirection: 'row',
@@ -334,23 +338,5 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Medium',
     marginLeft: 8,
-  },
-  // Indicators
-  indicatorContainer: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
-  },
-  swipeIndicator: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-  },
-  indicatorText: {
-    color: 'white',
-    fontSize: 11,
-    fontFamily: 'Inter-Regular',
-    opacity: 0.9,
   },
 });
