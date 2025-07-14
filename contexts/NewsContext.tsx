@@ -1,22 +1,27 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useState } from 'react';
 import { NewsArticle, NewsState } from '@/types/news.types';
+import { StorageService } from '@/services/storageService';
+import { supabaseService } from '@/services/supabaseService';
+import { Config } from '@/constants/Config';
 
 interface NewsContextType {
   state: NewsState;
   dispatch: React.Dispatch<NewsAction>;
   refreshNews: (language: string, location: string) => Promise<void>;
-  loadMoreNews: (language: string, location: string) => Promise<void>;
+  loadMoreNews: (language: string, location: string, direction: 'up' | 'down') => Promise<void>;
 }
 
 type NewsAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ARTICLES'; payload: NewsArticle[] }
-  | { type: 'ADD_ARTICLES'; payload: NewsArticle[] }
+  | { type: 'ADD_ARTICLES'; payload: { articles: NewsArticle[], position: 'start' | 'end' } }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_REFRESHING'; payload: boolean }
   | { type: 'SET_CURRENT_INDEX'; payload: number }
   | { type: 'SET_LANGUAGE'; payload: string }
   | { type: 'SET_LOCATION'; payload: string }
+  | { type: 'SET_SPECIFIC_ARTICLE'; payload: NewsArticle }
+  | { type: 'REMOVE_OLD_ARTICLES'; payload: number }
   | { type: 'RESET_STATE' };
 
 const initialState: NewsState = {
@@ -27,6 +32,7 @@ const initialState: NewsState = {
   currentIndex: 0,
   selectedLanguage: 'en',
   selectedLocation: 'all',
+  totalArticlesCount: 0,
 };
 
 const NewsContext = createContext<NewsContextType | undefined>(undefined);
@@ -36,9 +42,14 @@ function newsReducer(state: NewsState, action: NewsAction): NewsState {
     case 'SET_LOADING':
       return { ...state, loading: action.payload };
     case 'SET_ARTICLES':
-      return { ...state, articles: action.payload, error: null };
+      return { ...state, articles: action.payload };
     case 'ADD_ARTICLES':
-      return { ...state, articles: [...state.articles, ...action.payload] };
+      return {
+        ...state,
+        articles: action.payload.position === 'start'
+          ? [...action.payload.articles, ...state.articles]
+          : [...state.articles, ...action.payload.articles]
+      };
     case 'SET_ERROR':
       return { ...state, error: action.payload };
     case 'SET_REFRESHING':
@@ -49,6 +60,22 @@ function newsReducer(state: NewsState, action: NewsAction): NewsState {
       return { ...state, selectedLanguage: action.payload };
     case 'SET_LOCATION':
       return { ...state, selectedLocation: action.payload };
+    case 'SET_SPECIFIC_ARTICLE':
+      // Add the article to the beginning of the list if it doesn't exist
+      const exists = state.articles.some(article => article.id === action.payload.id);
+      if (!exists) {
+        return {
+          ...state,
+          articles: [action.payload, ...state.articles],
+          currentIndex: 0
+        };
+      }
+      return state;
+    case 'REMOVE_OLD_ARTICLES':
+      return {
+        ...state,
+        articles: state.articles.slice(0, action.payload)
+      };
     case 'RESET_STATE':
       return initialState;
     default:
@@ -67,51 +94,105 @@ export function NewsProvider({ children }: NewsProviderProps) {
     try {
       dispatch({ type: 'SET_REFRESHING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
-      dispatch({ type: 'SET_LOADING', payload: true });
-      
-      // Import here to avoid circular dependency
-      const { supabaseService } = await import('@/services/supabaseService');
-      const articles = await supabaseService.fetchNews(language, location, 10, 0);
-      
-      dispatch({ type: 'SET_ARTICLES', payload: articles });
+
+      // Get stored articles first
+      const storedData = await StorageService.getNewsData();
+      if (storedData && storedData.articles.length > 0) {
+        dispatch({ type: 'SET_ARTICLES', payload: storedData.articles });
+      }
+
+      // Then fetch fresh articles from the database
+      const freshArticles = await supabaseService.fetchNews(
+        language,
+        location,
+        Config.APP.TARGET_ARTICLES_COUNT,
+        0
+      );
+
+      if (freshArticles && freshArticles.length > 0) {
+        dispatch({ type: 'SET_ARTICLES', payload: freshArticles });
+        // Update storage with fresh articles
+        await StorageService.saveNewsData(freshArticles);
+      }
+
       dispatch({ type: 'SET_LANGUAGE', payload: language });
       dispatch({ type: 'SET_LOCATION', payload: location });
-      
-      // Maintain current index if possible, otherwise reset to 0
-      const currentIndex = Math.min(state.currentIndex, articles.length - 1);
-      dispatch({ type: 'SET_CURRENT_INDEX', payload: Math.max(0, currentIndex) });
     } catch (error) {
-      console.error('Failed to refresh news:', error);
-      // Only set error if we don't have any articles (don't override existing content)
-      if (state.articles.length === 0) {
-        dispatch({ type: 'SET_ERROR', payload: 'Failed to load news' });
-      }
+      console.error('Error refreshing news:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to refresh news' });
     } finally {
       dispatch({ type: 'SET_REFRESHING', payload: false });
-      dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
 
-  const loadMoreNews = async (language: string, location: string) => {
+  const loadMoreNews = async (language: string, location: string, direction: 'up' | 'down') => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
-      
-      // Import here to avoid circular dependency
-      const { supabaseService } = await import('@/services/supabaseService');
-      const articles = await supabaseService.fetchNews(language, location, 10, state.articles.length);
-      
-      dispatch({ type: 'ADD_ARTICLES', payload: articles });
+
+      const currentArticles = state.articles;
+      const lastArticle = currentArticles[currentArticles.length - 1];
+      const firstArticle = currentArticles[0];
+
+      let newArticles;
+      if (direction === 'down') {
+        newArticles = await supabaseService.fetchNews(
+          language,
+          location,
+          Config.APP.TARGET_ARTICLES_COUNT,
+          lastArticle?.id || 0,
+          'down'
+        );
+      } else {
+        newArticles = await supabaseService.fetchNews(
+          language,
+          location,
+          Config.APP.TARGET_ARTICLES_COUNT,
+          firstArticle?.id || 0,
+          'up'
+        );
+      }
+
+      if (newArticles && newArticles.length > 0) {
+        dispatch({
+          type: 'ADD_ARTICLES',
+          payload: {
+            articles: newArticles,
+            position: direction === 'down' ? 'end' : 'start'
+          }
+        });
+
+        // Update storage
+        const allArticles = direction === 'down'
+          ? [...currentArticles, ...newArticles]
+          : [...newArticles, ...currentArticles];
+
+        // Remove old articles if we exceed the maximum
+        if (allArticles.length > Config.APP.MAX_ARTICLES_IN_DB) {
+          const articlesToKeep = allArticles.slice(0, Config.APP.MAX_ARTICLES_IN_DB);
+          dispatch({ type: 'REMOVE_OLD_ARTICLES', payload: Config.APP.MAX_ARTICLES_IN_DB });
+          await StorageService.saveNewsData(articlesToKeep);
+        } else {
+          await StorageService.saveNewsData(allArticles);
+        }
+      }
     } catch (error) {
-      console.error('Failed to load more news:', error);
-      // Don't set error for load more failures, just log them
+      console.error('Error loading more news:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to load more news' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
 
   return (
-    <NewsContext.Provider value={{ state, dispatch, refreshNews, loadMoreNews }}>
+    <NewsContext.Provider
+      value={{
+        state,
+        dispatch,
+        refreshNews,
+        loadMoreNews,
+      }}
+    >
       {children}
     </NewsContext.Provider>
   );

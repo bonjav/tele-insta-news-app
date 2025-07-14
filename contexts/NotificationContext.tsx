@@ -13,6 +13,11 @@ import { supabaseService } from '@/services/supabaseService';
 import * as Device from 'expo-device';
 import { AppState } from 'react-native';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useRouter } from 'expo-router';
+import { useNews } from '@/contexts/NewsContext';
+
+// Import UserPreferences type directly from supabaseService
+import type { UserPreferences } from '@/services/supabaseService';
 
 interface NotificationContextType {
   expoPushToken: string | null;
@@ -22,149 +27,152 @@ interface NotificationContextType {
   toggleNotifications: () => Promise<void>;
 }
 
-const NotificationContext = createContext<NotificationContextType | undefined>(
-  undefined
-);
+const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-export const useNotification = () => {
+export function useNotifications() {
   const context = useContext(NotificationContext);
   if (context === undefined) {
-    throw new Error(
-      "useNotification must be used within a NotificationProvider"
-    );
+    throw new Error('useNotifications must be used within a NotificationProvider');
   }
   return context;
-};
-
-interface NotificationProviderProps {
-  children: ReactNode;
 }
 
-export const NotificationProvider: React.FC<NotificationProviderProps> = ({
-  children,
-}) => {
-  const { state: settingsState, updateUserPreferences } = useSettings();
+export function NotificationProvider({ children }: { children: ReactNode }) {
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
-  const [notification, setNotification] =
-    useState<Notifications.Notification | null>(null);
+  const [notification, setNotification] = useState<Notifications.Notification | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    settingsState.userPreferences?.notifications_enabled ?? true
-  );
-
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const notificationListener = useRef<Subscription>();
   const responseListener = useRef<Subscription>();
+  const { state: settingsState } = useSettings();
+  const router = useRouter();
+  const { setSpecificArticle } = useNews();
 
-  // Initialize notification state from user preferences
   useEffect(() => {
-    if (settingsState.userPreferences) {
-      setNotificationsEnabled(settingsState.userPreferences.notifications_enabled);
-    }
-  }, [settingsState.userPreferences]);
-
-  // Update user activity on app focus
-  useEffect(() => {
-    const updateActivity = async () => {
-      try {
-        await updateUserPreferences({});
-      } catch (error) {
-        console.error('Failed to update user activity:', error);
+    registerForPushNotificationsAsync().then(token => {
+      if (token) {
+        setExpoPushToken(token);
+        updatePushToken(token);
       }
-    };
+    }).catch(err => {
+      console.error('Failed to get push token:', err);
+      setError(err);
+    });
 
-    // Set up app state change listener
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active') {
-        updateActivity();
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      setNotification(notification);
+    });
+
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as { articleId?: number; languageCode?: string };
+      
+      if (data.articleId) {
+        // Load the article in the specified language or user's preferred language
+        setSpecificArticle(
+          data.articleId,
+          data.languageCode || settingsState.language || 'en'
+        ).then(() => {
+          // Navigate to the news screen
+          router.push('/');
+        }).catch(error => {
+          console.error('Error loading notification article:', error);
+        });
       }
     });
 
     return () => {
-      subscription.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (notificationsEnabled) {
-      registerForPushNotificationsAsync().then(
-        async (token) => {
-          setExpoPushToken(token || null);
-          // Update token in preferences
-          if (token) {
-            try {
-              await updateUserPreferences({
-                push_token: token,
-                notifications_enabled: true
-              });
-            } catch (error) {
-              console.error('Failed to update push token:', error);
-            }
-          }
-        },
-        (error) => setError(error)
-      );
-    } else {
-      setExpoPushToken(null);
-      // Clear token in preferences
-      try {
-        updateUserPreferences({
-          push_token: null,
-          notifications_enabled: false
-        });
-      } catch (error) {
-        console.error('Failed to clear push token:', error);
-      }
-    }
-
-    notificationListener.current =
-      Notifications.addNotificationReceivedListener((notification) => {
-        console.log("🔔 Notification Received: ", notification);
-        setNotification(notification);
-      });
-
-    responseListener.current =
-      Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log(
-          "🔔 Notification Response: ",
-          JSON.stringify(response, null, 2),
-          JSON.stringify(response.notification.request.content.data, null, 2)
-        );
-        // Handle the notification response here
-      });
-
-    return () => {
       if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(
-          notificationListener.current
-        );
+        Notifications.removeNotificationSubscription(notificationListener.current);
       }
       if (responseListener.current) {
         Notifications.removeNotificationSubscription(responseListener.current);
       }
     };
-  }, [notificationsEnabled]);
+  }, [settingsState.language]);
+
+  const updatePushToken = async (token: string) => {
+    try {
+      const deviceId = await Device.deviceName;
+      if (!deviceId) {
+        throw new Error('Device ID not available');
+      }
+
+      // First try to get existing preferences
+      const existingPrefs = await supabaseService.getUserPreferences(deviceId);
+      
+      if (existingPrefs) {
+        // Update existing preferences
+        await supabaseService.upsertUserPreferences(deviceId, {
+          ...existingPrefs,
+          push_token: token,
+          notifications_enabled: notificationsEnabled,
+          updated_at: new Date().toISOString(),
+        });
+      } else {
+        // Create new preferences with default values
+        const newPrefs: UserPreferences = {
+          device_id: deviceId,
+          push_token: token,
+          notifications_enabled: notificationsEnabled,
+          language_code: settingsState.language || 'en',
+          last_active_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          id: 0, // This will be set by the database
+        };
+        await supabaseService.upsertUserPreferences(deviceId, newPrefs);
+      }
+    } catch (error) {
+      console.error('Failed to update push token:', error);
+      setError(error as Error);
+    }
+  };
 
   const toggleNotifications = async () => {
     try {
       const newState = !notificationsEnabled;
       setNotificationsEnabled(newState);
       
-      await updateUserPreferences({
-        notifications_enabled: newState,
-      });
+      const deviceId = await Device.deviceName;
+      if (!deviceId) {
+        throw new Error('Device ID not available');
+      }
+
+      // Update preferences in database
+      const existingPrefs = await supabaseService.getUserPreferences(deviceId);
+      
+      if (existingPrefs) {
+        await supabaseService.upsertUserPreferences(deviceId, {
+          ...existingPrefs,
+          notifications_enabled: newState,
+          updated_at: new Date().toISOString(),
+        });
+      } else {
+        const newPrefs: UserPreferences = {
+          device_id: deviceId,
+          push_token: expoPushToken || null,
+          notifications_enabled: newState,
+          language_code: settingsState.language || 'en',
+          last_active_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          id: 0, // This will be set by the database
+        };
+        await supabaseService.upsertUserPreferences(deviceId, newPrefs);
+      }
     } catch (error) {
       console.error('Failed to toggle notifications:', error);
+      setError(error as Error);
       // Revert state on error
       setNotificationsEnabled(!notificationsEnabled);
-      throw error;
     }
   };
 
   return (
     <NotificationContext.Provider
-      value={{ 
-        expoPushToken, 
-        notification, 
+      value={{
+        expoPushToken,
+        notification,
         error,
         notificationsEnabled,
         toggleNotifications,
@@ -173,4 +181,4 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       {children}
     </NotificationContext.Provider>
   );
-};
+}

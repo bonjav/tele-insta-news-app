@@ -53,6 +53,7 @@ export interface UserPreferences {
   push_token: string | null;
   notifications_enabled: boolean;
   language_code: string | null;
+  location: string | null;
   last_active_at: string;
   created_at: string;
   updated_at: string;
@@ -109,80 +110,119 @@ class SupabaseService {
     };
   }
 
+  // Fetch a specific article by ID with translation
+  async fetchArticleById(
+    articleId: number,
+    languageCode: string = 'en'
+  ): Promise<NewsArticle | null> {
+    if (!this.isClientReady()) {
+      throw new Error('Supabase client not ready');
+    }
+
+    try {
+      // Fetch the article
+      const { data: article, error: articleError } = await this.client!
+        .from('news_article')
+        .select('*')
+        .eq('id', articleId)
+        .single();
+
+      if (articleError) {
+        console.error('Error fetching article:', articleError);
+        throw articleError;
+      }
+
+      if (!article) {
+        return null;
+      }
+
+      // Fetch the translation
+      const { data: translation, error: translationError } = await this.client!
+        .from('news_article_translation')
+        .select('*')
+        .eq('article_id', articleId)
+        .eq('language_code', languageCode)
+        .single();
+
+      if (translationError) {
+        console.error('Error fetching translation:', translationError);
+        throw translationError;
+      }
+
+      if (!translation) {
+        // If translation not found in requested language, try English
+        if (languageCode !== 'en') {
+          return this.fetchArticleById(articleId, 'en');
+        }
+        return null;
+      }
+
+      return this.convertToNewsArticle(article, translation);
+    } catch (error) {
+      console.error('Failed to fetch article by ID:', error);
+      throw error;
+    }
+  }
+
   // Fetch news articles from database with language and location filtering
   async fetchNews(
     languageCode: string = 'en',
     location: string = 'all',
-    limit: number = 10,
-    offset: number = 0
+    limit: number = Config.APP.TARGET_ARTICLES_COUNT,
+    offset: number = 0,
+    direction: 'up' | 'down' = 'down'
   ): Promise<NewsArticle[]> {
     if (!this.isClientReady()) {
       throw new Error('Supabase client not ready');
     }
 
     try {
-      // First, get the article IDs that have translations for the specified language
-      const { data: translationData, error: translationError } = await this.client!
+      let query = this.client!
         .from('news_article_translation')
-        .select('article_id, title, description, published_at, language_code')
-        .eq('language_code', languageCode)
-        .order('published_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+        .select(`
+          article_id,
+          title,
+          description,
+          published_at,
+          language_code,
+          news_article (
+            id,
+            location,
+            source_channel,
+            article_url,
+            image_url,
+            category
+          )
+        `)
+        .eq('language_code', languageCode);
+
+      // Add location filter if not 'all'
+      if (location !== 'all') {
+        query = query.eq('news_article.location', location);
+      }
+
+      // Add ID-based pagination based on direction
+      if (direction === 'up') {
+        query = query.lt('article_id', offset).order('article_id', { ascending: false });
+      } else {
+        query = query.gt('article_id', offset).order('article_id', { ascending: true });
+      }
+
+      const { data: translationData, error: translationError } = await query.limit(limit);
 
       if (translationError) {
         console.error('Error fetching translations:', translationError);
         throw translationError;
       }
 
-      if (!translationData || translationData.length === 0) {
-        return [];
-      }
+      // Convert to NewsArticle format
+      const articles: NewsArticle[] = translationData
+        .filter(translation => translation.news_article) // Filter out any translations without articles
+        .map(translation => this.convertToNewsArticle(translation.news_article, translation));
 
-      // Get the article IDs
-      const articleIds = translationData.map(t => t.article_id);
-
-      // Fetch the main articles
-      let query = this.client!
-        .from('news_article')
-        .select('*')
-        .in('id', articleIds);
-
-      // Filter by location if not 'all'
-      if (location !== 'all') {
-        query = query.eq('location', location);
-      }
-
-      const { data: articleData, error: articleError } = await query;
-
-      if (articleError) {
-        console.error('Error fetching articles:', articleError);
-        throw articleError;
-      }
-
-      if (!articleData) {
-        return [];
-      }
-
-      // Create a map of translations by article_id
-      const translationMap = new Map();
-      translationData.forEach(t => {
-        translationMap.set(t.article_id, t);
-      });
-
-      // Combine articles with their translations
-      const combinedArticles = articleData
-        .map(article => {
-          const translation = translationMap.get(article.id);
-          if (translation) {
-            return this.convertToNewsArticle(article, translation);
-          }
-          return null;
-        })
-        .filter(Boolean) as NewsArticle[];
-
-      return combinedArticles;
+      return direction === 'up' ? articles.reverse() : articles;
     } catch (error) {
-      console.error('Failed to fetch news from database:', error);
+      console.error('Failed to fetch news:', error);
       throw error;
     }
   }
@@ -340,26 +380,50 @@ class SupabaseService {
     }
 
     try {
-      // Always update last_active_at
-      const updatedPreferences = {
-        ...preferences,
+      // First check if the record exists
+      const existingPrefs = await this.getUserPreferences(deviceId);
+
+      // Prepare the update data
+      const updateData = {
         device_id: deviceId,
+        ...preferences,
         last_active_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await this.client!
-        .from('user_preferences')
-        .upsert(updatedPreferences)
-        .eq('device_id', deviceId)
-        .select()
-        .single();
+      if (existingPrefs) {
+        // Update existing record
+        const { data, error } = await this.client!
+          .from('user_preferences')
+          .update(updateData)
+          .eq('device_id', deviceId)
+          .select()
+          .single();
 
-      if (error) {
-        console.error('Error upserting user preferences:', error);
-        throw error;
+        if (error) {
+          console.error('Error updating user preferences:', error);
+          throw error;
+        }
+
+        return data;
+      } else {
+        // Insert new record
+        const { data, error } = await this.client!
+          .from('user_preferences')
+          .insert({
+            ...updateData,
+            created_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error inserting user preferences:', error);
+          throw error;
+        }
+
+        return data;
       }
-
-      return data;
     } catch (error) {
       console.error('Failed to upsert user preferences:', error);
       throw error;

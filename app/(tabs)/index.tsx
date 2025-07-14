@@ -1,8 +1,8 @@
-import { useNotification } from '@/contexts/NotificationContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 import NewsScreen from '@/screens/NewsScreen';
 
 export default function HomeScreen() {
-  const { notification, expoPushToken, error } = useNotification();
+  const { notification, expoPushToken, error } = useNotifications();
 
   if(error){
     console.error('Error registering for push notifications:', error);

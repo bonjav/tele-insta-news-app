@@ -16,7 +16,7 @@ import { X, Moon, Sun, Globe, MapPin, ChevronRight, Bug, Bell } from 'lucide-rea
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useNews } from '@/contexts/NewsContext';
-import { useNotification } from '@/contexts/NotificationContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 import { Config } from '@/constants/Config';
 import DebugPanel from './DebugPanel';
 
@@ -99,7 +99,7 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
   const { theme, colors, toggleTheme } = useTheme();
   const { state: settingsState, setLanguage, setLocation } = useSettings();
   const { refreshNews } = useNews();
-  const { notificationsEnabled, toggleNotifications } = useNotification();
+  const { notificationsEnabled, toggleNotifications } = useNotifications();
   
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [locationModalVisible, setLocationModalVisible] = useState(false);

@@ -30,6 +30,7 @@ export interface NewsState {
   currentIndex: number;
   selectedLanguage: string;
   selectedLocation: string;
+  totalArticlesCount: number;
 }
 
 export interface StoredNewsData {
@@ -38,6 +39,12 @@ export interface StoredNewsData {
   totalCount: number;
   language: string;
   location: string;
+}
+
+export interface AppSettings {
+  language: string;
+  location: string;
+  theme: 'light' | 'dark';
 }
 
 export interface LanguageConfig {
@@ -49,13 +56,7 @@ export interface LanguageConfig {
 }
 
 export interface LocationConfig {
-  id: number;
   locationName: string;
+  shortName: string;
   isActive: boolean;
-}
-
-export interface AppSettings {
-  language: string;
-  location: string;
-  theme: 'light' | 'dark';
 }

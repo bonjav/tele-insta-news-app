@@ -11,12 +11,13 @@ interface UserPreferences {
   push_token: string | null;
   notifications_enabled: boolean;
   language_code: string | null;
+  location: string | null;
   last_active_at: string;
 }
 
 interface SettingsState {
   language: string;
-  location: string;
+  location: string | null;  // Allow null location
   languages: LanguageConfig[];
   locations: LocationConfig[];
   loading: boolean;
@@ -24,6 +25,7 @@ interface SettingsState {
   initialized: boolean;
   userPreferences: UserPreferences | null;
   deviceId: string;
+  actualCountry: { countryCode: string; countryName: string } | null;
 }
 
 interface SettingsContextType {
@@ -45,11 +47,12 @@ type SettingsAction =
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_INITIALIZED'; payload: boolean }
   | { type: 'SET_USER_PREFERENCES'; payload: UserPreferences | null }
-  | { type: 'SET_DEVICE_ID'; payload: string };
+  | { type: 'SET_DEVICE_ID'; payload: string }
+  | { type: 'SET_ACTUAL_COUNTRY'; payload: { countryCode: string; countryName: string } | null };
 
 const initialState: SettingsState = {
   language: 'en',
-  location: 'all',
+  location: null,  // Default to null instead of 'all'
   languages: [],
   locations: [],
   loading: false,
@@ -57,6 +60,7 @@ const initialState: SettingsState = {
   initialized: false,
   userPreferences: null,
   deviceId: Device.deviceName || Device.modelName || 'unknown_device',
+  actualCountry: null,
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -81,6 +85,8 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
       return { ...state, userPreferences: action.payload };
     case 'SET_DEVICE_ID':
       return { ...state, deviceId: action.payload };
+    case 'SET_ACTUAL_COUNTRY':
+      return { ...state, actualCountry: action.payload };
     default:
       return state;
   }
@@ -98,6 +104,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       const updatedPrefs = await supabaseService.upsertUserPreferences(state.deviceId, {
         ...preferences,
         language_code: state.language,
+        location: state.location,
       });
       dispatch({ type: 'SET_USER_PREFERENCES', payload: updatedPrefs });
     } catch (error) {
@@ -123,6 +130,10 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     dispatch({ type: 'SET_LOCATION', payload: location });
     try {
       await AsyncStorage.setItem('app_location', location);
+      // Update location in user preferences if we have them
+      if (state.userPreferences) {
+        await updateUserPreferences({ location });
+      }
     } catch (error) {
       console.error('Failed to save location setting:', error);
     }
@@ -154,10 +165,27 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     }
   };
 
+  const detectUserCountry = async () => {
+    try {
+      const userCountry = await locationService.getUserCountry();
+      if (userCountry) {
+        dispatch({ type: 'SET_ACTUAL_COUNTRY', payload: userCountry });
+        await AsyncStorage.setItem('user_actual_country', JSON.stringify(userCountry));
+        return userCountry;
+      }
+    } catch (error) {
+      console.warn('Failed to detect user country:', error);
+    }
+    return null;
+  };
+
   const initializeSettings = async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
+
+      // Load available languages and locations first
+      await Promise.allSettled([loadLanguages(), loadLocations()]);
 
       // First, try to get existing user preferences
       const prefs = await supabaseService.getUserPreferences(state.deviceId);
@@ -165,7 +193,15 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
       // Load saved settings
       const savedLanguage = prefs?.language_code || await AsyncStorage.getItem('app_language');
-      const savedLocation = await AsyncStorage.getItem('app_location');
+      const savedLocation = prefs?.location || await AsyncStorage.getItem('app_location');
+
+      // Try to get the actual country from storage or detect it
+      const savedActualCountry = await AsyncStorage.getItem('user_actual_country');
+      const actualCountry = savedActualCountry ? JSON.parse(savedActualCountry) : await detectUserCountry();
+      
+      if (actualCountry) {
+        dispatch({ type: 'SET_ACTUAL_COUNTRY', payload: actualCountry });
+      }
 
       if (savedLanguage) {
         dispatch({ type: 'SET_LANGUAGE', payload: savedLanguage });
@@ -175,27 +211,38 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         dispatch({ type: 'SET_LOCATION', payload: savedLocation });
       }
 
-      // Load available languages and locations in parallel
-      await Promise.allSettled([loadLanguages(), loadLocations()]);
-
-      // If no saved location, try to detect user's location
+      // If no saved location, try to use the actual country if it's supported
       if (!savedLocation) {
         try {
           const availableLocationNames = state.locations.map(loc => loc.locationName);
-          if (availableLocationNames.length > 0) {
-            const defaultLocation = await locationService.getDefaultLocation(availableLocationNames);
-            dispatch({ type: 'SET_LOCATION', payload: defaultLocation });
-            await AsyncStorage.setItem('app_location', defaultLocation);
+          
+          // Only set location if the actual country is in our supported locations
+          if (actualCountry && availableLocationNames.includes(actualCountry.countryName)) {
+            dispatch({ type: 'SET_LOCATION', payload: actualCountry.countryName });
+            await AsyncStorage.setItem('app_location', actualCountry.countryName);
+          } else {
+            // Otherwise keep it as null
+            dispatch({ type: 'SET_LOCATION', payload: null });
+            await AsyncStorage.setItem('app_location', '');
+          }
+          
+          // Update location in user preferences
+          if (state.userPreferences) {
+            await updateUserPreferences({ location: state.location });
           }
         } catch (error) {
-          console.warn('Failed to detect user location, using default:', error);
+          console.warn('Failed to set location:', error);
+          // Keep location as null on error
+          dispatch({ type: 'SET_LOCATION', payload: null });
         }
       }
 
       // If we don't have user preferences yet, create them
       if (!prefs) {
+        const currentLocation = savedLocation || state.location;
         const newPrefs = await supabaseService.upsertUserPreferences(state.deviceId, {
           language_code: savedLanguage || 'en',
+          location: currentLocation,
           notifications_enabled: true,
         });
         dispatch({ type: 'SET_USER_PREFERENCES', payload: newPrefs });

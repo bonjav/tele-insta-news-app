@@ -54,15 +54,15 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <SettingsProvider>
-        <NotificationProvider>
-          <NewsProvider>
+        <NewsProvider>
+          <NotificationProvider>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="+not-found" options={{ title: 'Not Found' }} />
             </Stack>
             <StatusBar style="auto" />
-          </NewsProvider>
-        </NotificationProvider>
+          </NotificationProvider>
+        </NewsProvider>
       </SettingsProvider>
     </ThemeProvider>
   );

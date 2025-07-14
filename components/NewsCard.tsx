@@ -15,6 +15,9 @@ import { ExternalLink, Share2, User } from 'lucide-react-native';
 import { NewsArticle } from '@/types/news.types';
 import { useTheme } from '@/contexts/ThemeContext';
 
+// Import notification icon
+const notificationIcon = require('@/assets/images/notification-icon.png');
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface NewsCardProps {
@@ -74,25 +77,26 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
           </View>
         )}
         
-        {/* Source Overlay */}
-        <View style={styles.imageOverlay}>
-          <View style={styles.metaContainer}>
-            <View style={styles.sourceContainer}>
-              <User size={14} color="white" />
-              <Text style={styles.sourceText}>{article.source.name}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Empty Image Overlay - keeping the gradient effect */}
+        <View style={styles.imageOverlay} />
       </View>
 
       {/* Description Section - expanded */}
       <View style={styles.descriptionSection}>
         {/* Share Icon - positioned on the right */}
-        <TouchableOpacity style={styles.shareIconContainer} onPress={handleShare}>
-          <View style={styles.shareIconBackground}>
-            <Share2 size={16} color="white" />
+        <View style={styles.headerContainer}>
+          <View style={styles.appNameContainer}>
+            <View style={styles.iconContainer}>
+              <Image source={notificationIcon} style={styles.appLogo} resizeMode="cover" />
+            </View>
+            <Text style={[styles.appName, { color: colors.text }]}>DailySnapShorts</Text>
           </View>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.shareIconContainer} onPress={handleShare}>
+            <View style={styles.shareIconBackground}>
+              <Share2 size={16} color="white" />
+            </View>
+          </TouchableOpacity>
+        </View>
 
         <Text style={styles.title} numberOfLines={3}>
           {article.title}
@@ -106,15 +110,13 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
       <View style={styles.linkSection}>
         <TouchableOpacity style={styles.readMoreButton} onPress={handleOpenLink}>
           <ExternalLink size={18} color={colors.primary} />
-          <Text style={styles.readMoreText}>Read Full Article</Text>
+          <Text style={styles.readMoreText}>View Full Article at {article.source.name}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Swipe Indicators */}
-      <View style={styles.indicatorContainer}>
-        <View style={styles.swipeIndicator}>
-          <Text style={styles.indicatorText}>↑ Swipe up for next</Text>
-        </View>
+      <View style={styles.swipeIndicator}>
+        <Text style={styles.indicatorText}>↑ Swipe up for next</Text>
       </View>
     </View>
   );
@@ -152,8 +154,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.overlay,
-    padding: 12,
+    height: 80,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   metaContainer: {
     flexDirection: 'row',
@@ -191,28 +193,25 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   // Share Icon - positioned on the right
   shareIconContainer: {
-    position: 'absolute',
-    top: -10,
-    right: 0,
     zIndex: 10,
   },
   shareIconBackground: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     backgroundColor: colors.primary,
-    borderRadius: 16,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
       web: {
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
       },
       default: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.15,
+        shadowRadius: 2,
+        elevation: 2,
       },
     }),
   },
@@ -222,6 +221,46 @@ const createStyles = (colors: any) => StyleSheet.create({
     padding: 20,
     justifyContent: 'flex-start',
     paddingBottom: 100, // Space for link section above bottom bar
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: -24,
+  },
+  appNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: colors.primary,
+    marginRight: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.15,
+        shadowRadius: 2,
+        elevation: 2,
+      },
+    }),
+  },
+  appLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  appName: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    opacity: 0.8,
   },
   title: {
     color: colors.text,
@@ -255,12 +294,13 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 8,
   },
   readMoreText: {
     color: colors.primary,
     fontSize: 14,
     fontFamily: 'Inter-Medium',
-    marginLeft: 6,
+    marginLeft: 8,
   },
   // Indicators
   indicatorContainer: {

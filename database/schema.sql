@@ -126,6 +126,7 @@ CREATE TABLE user_preferences (
     push_token VARCHAR(255),
     notifications_enabled BOOLEAN DEFAULT true,
     language_code VARCHAR(2) REFERENCES language_config(code),
+    location VARCHAR(255) REFERENCES location_config(location_name),
     last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -136,6 +137,7 @@ CREATE TABLE user_preferences (
 CREATE INDEX idx_user_preferences_device_id ON user_preferences(device_id);
 CREATE INDEX idx_user_preferences_push_token ON user_preferences(push_token);
 CREATE INDEX idx_user_preferences_language ON user_preferences(language_code);
+CREATE INDEX idx_user_preferences_location ON user_preferences(location);
 CREATE INDEX idx_user_preferences_last_active ON user_preferences(last_active_at);
 
 

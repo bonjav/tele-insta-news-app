@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import {
   View,
   FlatList,
@@ -7,6 +7,8 @@ import {
   ActivityIndicator,
   Text,
   RefreshControl,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -29,6 +31,8 @@ export default function NewsScreen() {
   const { isInitialized, isInitializing, hasLoadedInitialNews, settingsState } = useSettingsInitialization();
   const { colors } = useTheme();
   const flatListRef = useRef<FlatList>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isLoadingPrevious, setIsLoadingPrevious] = useState(false);
 
   const handleViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -44,10 +48,40 @@ export default function NewsScreen() {
   }, [settingsState.language, settingsState.location, refreshNews]);
 
   const handleLoadMore = useCallback(async () => {
-    if (settingsState.language && settingsState.location && !loading) {
-      await loadMoreNews(settingsState.language, settingsState.location);
+    if (settingsState.language && settingsState.location && !loading && !isLoadingMore) {
+      setIsLoadingMore(true);
+      try {
+        await loadMoreNews(settingsState.language, settingsState.location, 'down');
+      } finally {
+        setIsLoadingMore(false);
+      }
     }
-  }, [settingsState.language, settingsState.location, loading, loadMoreNews]);
+  }, [settingsState.language, settingsState.location, loading, loadMoreNews, isLoadingMore]);
+
+  const handleLoadPrevious = useCallback(async () => {
+    if (settingsState.language && settingsState.location && !loading && !isLoadingPrevious) {
+      setIsLoadingPrevious(true);
+      try {
+        await loadMoreNews(settingsState.language, settingsState.location, 'up');
+      } finally {
+        setIsLoadingPrevious(false);
+      }
+    }
+  }, [settingsState.language, settingsState.location, loading, loadMoreNews, isLoadingPrevious]);
+
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    
+    // Check if we're at the top
+    if (contentOffset.y <= 0 && !refreshing) {
+      handleLoadPrevious();
+    }
+    
+    // Check if we're at the bottom
+    if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 20) {
+      handleLoadMore();
+    }
+  }, [handleLoadMore, handleLoadPrevious, refreshing]);
 
   const renderNewsCard = ({ item, index }: { item: NewsArticle; index: number }) => (
     <NewsCard
@@ -59,10 +93,10 @@ export default function NewsScreen() {
   const renderLoadingState = () => (
     <View style={styles.loadingContainer}>
       <ActivityIndicator size="large" color={colors.primary} />
-      <Text style={styles.loadingText}>
+      <Text style={[styles.loadingText, { color: colors.text }]}>
         {isInitializing ? 'Initializing app...' : 'Loading news articles...'}
       </Text>
-      <Text style={styles.loadingSubtext}>
+      <Text style={[styles.loadingSubtext, { color: colors.secondary }]}>
         This may take a moment
       </Text>
     </View>
@@ -71,16 +105,16 @@ export default function NewsScreen() {
   const renderErrorState = () => (
     <View style={styles.errorContainer}>
       <Text style={styles.errorTitle}>📰</Text>
-      <Text style={styles.errorText}>{error}</Text>
-      <Text style={styles.errorSubtext}>Pull down to refresh</Text>
+      <Text style={[styles.errorText, { color: colors.primary }]}>{error}</Text>
+      <Text style={[styles.errorSubtext, { color: colors.secondary }]}>Pull down to refresh</Text>
     </View>
   );
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyTitle}>📰</Text>
-      <Text style={styles.emptyText}>No news articles found</Text>
-      <Text style={styles.emptySubtext}>
+      <Text style={[styles.emptyText, { color: colors.text }]}>No news articles found</Text>
+      <Text style={[styles.emptySubtext, { color: colors.secondary }]}>
         Try changing your language or location settings
       </Text>
     </View>
@@ -89,7 +123,7 @@ export default function NewsScreen() {
   // Show loading while initializing
   if (isInitializing) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar style="light" />
         {renderLoadingState()}
       </SafeAreaView>
@@ -99,7 +133,7 @@ export default function NewsScreen() {
   // Show loading if we haven't loaded initial news yet
   if (!hasLoadedInitialNews) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar style="light" />
         {renderLoadingState()}
       </SafeAreaView>
@@ -109,45 +143,15 @@ export default function NewsScreen() {
   // Show loading if we have no articles and are still loading
   if (loading && articles.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar style="light" />
         {renderLoadingState()}
       </SafeAreaView>
     );
   }
 
-  // Only show error if we're initialized, have loaded initial news, not loading, and have an error
-  if (error && articles.length === 0 && isInitialized && hasLoadedInitialNews && !loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="light" />
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={colors.primary}
-        />
-        {renderErrorState()}
-      </SafeAreaView>
-    );
-  }
-
-  // Show empty state if we have no articles but no error
-  if (articles.length === 0 && isInitialized && hasLoadedInitialNews && !loading && !error) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="light" />
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={colors.primary}
-        />
-        {renderEmptyState()}
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar style="auto" />
       <FlatList
         ref={flatListRef}
@@ -167,13 +171,24 @@ export default function NewsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="white"
-            titleColor="white"
-            title="Pull to refresh articles"
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+            progressBackgroundColor={colors.cardBackground}
           />
         }
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        ListEmptyComponent={renderEmptyState()}
+        ListHeaderComponent={isLoadingPrevious ? (
+          <View style={styles.loadingIndicator}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : null}
+        ListFooterComponent={isLoadingMore ? (
+          <View style={styles.loadingIndicator}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : null}
         getItemLayout={(data, index) => ({
           length: SCREEN_HEIGHT,
           offset: SCREEN_HEIGHT * index,
@@ -184,7 +199,6 @@ export default function NewsScreen() {
         windowSize={5}
         initialNumToRender={2}
       />
-      
     </SafeAreaView>
   );
 }
@@ -192,92 +206,64 @@ export default function NewsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
-    padding: 20,
   },
   loadingText: {
-    color: 'white',
-    fontSize: 18,
-    fontFamily: 'Inter-Medium',
-    marginTop: 20,
-    textAlign: 'center',
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
   },
   loadingSubtext: {
-    color: 'white',
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
     marginTop: 8,
-    opacity: 0.7,
-    textAlign: 'center',
+    fontSize: 14,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
     padding: 20,
   },
   errorTitle: {
-    fontSize: 60,
-    marginBottom: 20,
+    fontSize: 48,
+    marginBottom: 16,
   },
   errorText: {
-    color: 'white',
-    fontSize: 18,
-    fontFamily: 'Inter-Medium',
+    fontSize: 16,
+    fontWeight: '600',
     textAlign: 'center',
     marginBottom: 8,
   },
   errorSubtext: {
-    color: 'white',
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    opacity: 0.7,
     textAlign: 'center',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
     padding: 20,
+    height: SCREEN_HEIGHT,
   },
   emptyTitle: {
-    fontSize: 60,
-    marginBottom: 20,
+    fontSize: 48,
+    marginBottom: 16,
   },
   emptyText: {
-    color: 'white',
-    fontSize: 18,
-    fontFamily: 'Inter-Medium',
+    fontSize: 16,
+    fontWeight: '600',
     textAlign: 'center',
     marginBottom: 8,
   },
   emptySubtext: {
-    color: 'white',
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    opacity: 0.7,
     textAlign: 'center',
   },
-  counterContainer: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  counterText: {
-    color: 'white',
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
+  loadingIndicator: {
+    paddingVertical: 20,
+    alignItems: 'center',
   },
 });
