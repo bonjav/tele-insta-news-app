@@ -27,6 +27,13 @@ export const Config = {
     CACHE_EXPIRY_HOURS: 6, // Hours before data is considered stale
     REQUEST_DELAY_MS: 500, // Delay between API request batches
     MAX_ARTICLES_IN_DB: parseInt(process.env.EXPO_PUBLIC_MAX_ARTICLES_IN_DB || '1000'),
+    
+    // Bidirectional Loading Configuration
+    LOCAL_STORAGE_THRESHOLD: 100, // Maximum articles to keep in local storage
+    INITIAL_LOAD_COUNT: 50, // Articles to load initially (always latest)
+    LOAD_MORE_BATCH_SIZE: 10, // Articles to load when scrolling
+    CLEANUP_THRESHOLD: 70, // When to trigger cleanup (keep only THRESHOLD amount)
+    MIN_ARTICLES_BEFORE_FETCH: 5, // Minimum articles before fetching more from database
   },
   
   // Scheduler Configuration

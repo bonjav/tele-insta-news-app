@@ -244,6 +244,8 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       }
 
       // If no saved location, try to use the actual country if it's supported
+      let determinedLocation: string | null = savedLocation;
+      
       if (!savedLocation) {
         try {
           const availableLocationNames = availableLocations.map(loc => loc.locationName);
@@ -252,35 +254,40 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
           // Only set location if the actual country is in our supported locations
           if (actualCountry && availableLocationNames.includes(actualCountry.countryName)) {
             console.log('Setting location to detected country:', actualCountry.countryName);
+            determinedLocation = actualCountry.countryName;
             dispatch({ type: 'SET_LOCATION', payload: actualCountry.countryName });
             await AsyncStorage.setItem('app_location', actualCountry.countryName);
           } else {
             console.log('Detected country not in supported locations or no country detected');
             // Otherwise keep it as null
+            determinedLocation = null;
             dispatch({ type: 'SET_LOCATION', payload: null });
             await AsyncStorage.setItem('app_location', '');
           }
           
-          // Update location in user preferences
+          // Update location in user preferences if they already exist
           if (state.userPreferences) {
-            await updateUserPreferences({ location: state.location });
+            console.log('Updating existing user preferences with location:', determinedLocation);
+            await updateUserPreferences({ location: determinedLocation });
           }
         } catch (error) {
           console.warn('Failed to set location:', error);
           // Keep location as null on error
+          determinedLocation = null;
           dispatch({ type: 'SET_LOCATION', payload: null });
         }
       }
 
       // If we don't have user preferences yet, create them
       if (!prefs) {
-        const currentLocation = savedLocation || state.location;
+        console.log('Creating new user preferences with location:', determinedLocation);
         const newPrefs = await supabaseService.upsertUserPreferences(state.deviceId, {
           language_code: savedLanguage || 'en',
-          location: currentLocation,
+          location: determinedLocation,
           notifications_enabled: true,
         });
         dispatch({ type: 'SET_USER_PREFERENCES', payload: newPrefs });
+        console.log('Created user preferences:', newPrefs);
       }
 
       dispatch({ type: 'SET_INITIALIZED', payload: true });

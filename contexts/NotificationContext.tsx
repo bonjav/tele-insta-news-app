@@ -50,11 +50,34 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { dispatch, refreshNews } = useNews();
 
+  // Initialize notification state from existing user preferences
+  useEffect(() => {
+    const initializeNotificationState = async () => {
+      try {
+        const deviceId = await Device.deviceName;
+        if (deviceId) {
+          const existingPrefs = await supabaseService.getUserPreferences(deviceId);
+          if (existingPrefs && existingPrefs.notifications_enabled !== undefined) {
+            console.log('Loading existing notification state:', existingPrefs.notifications_enabled);
+            setNotificationsEnabled(existingPrefs.notifications_enabled);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load existing notification state:', error);
+      }
+    };
+
+    initializeNotificationState();
+  }, []);
+
   useEffect(() => {
     registerForPushNotificationsAsync().then(token => {
       if (token) {
+        console.log('Push token obtained successfully, enabling notifications');
+        // If we successfully got a push token, it means user granted permissions
+        setNotificationsEnabled(true);
         setExpoPushToken(token);
-        updatePushToken(token);
+        updatePushToken(token, true); // Pass true to indicate notifications should be enabled
       }
     }).catch(err => {
       console.error('Failed to get push token:', err);
@@ -82,25 +105,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         try {
           console.log('Looking for article with ID:', data.articleId);
           
-          // First try to find the article in local storage
-          const localArticle = await StorageService.findArticleById(data.articleId);
+          // Check current app state to determine behavior
+          const currentAppState = AppState.currentState;
+          console.log('Current app state:', currentAppState);
           
-          if (localArticle) {
-            console.log('Found article in local storage:', localArticle.title);
-            // If found in local storage, display it immediately
-            dispatch({ 
-              type: 'SET_SPECIFIC_ARTICLE', 
-              payload: localArticle 
-            });
-          } else {
-            console.log('Article not found in local storage, refreshing news...');
-            // If not found in local storage, refresh the news data
+          const isAppInForeground = currentAppState === 'active';
+          
+          if (isAppInForeground) {
+            // App is already open - always refresh local store with latest news
+            console.log('App is in foreground - refreshing local store with latest news...');
             await refreshNews(
               settingsState.language || 'en',
-              data.location // Pass location directly, it will be null if not specified
+              data.location || settingsState.location // Use notification location or user's location
             );
             
-            // After refresh, try to find the article again
+            // After refresh, find the article
             const refreshedArticle = await StorageService.findArticleById(data.articleId);
             if (refreshedArticle) {
               console.log('Found article after refresh:', refreshedArticle.title);
@@ -110,6 +129,40 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               });
             } else {
               console.warn('Article not found even after refresh. ArticleId:', data.articleId);
+            }
+          } else {
+            // App was not open - use existing logic (refresh only if article not found locally)
+            console.log('App was not in foreground - checking local storage first...');
+            
+            // First try to find the article in local storage
+            const localArticle = await StorageService.findArticleById(data.articleId);
+            
+            if (localArticle) {
+              console.log('Found article in local storage:', localArticle.title);
+              // If found in local storage, display it immediately
+              dispatch({ 
+                type: 'SET_SPECIFIC_ARTICLE', 
+                payload: localArticle 
+              });
+            } else {
+              console.log('Article not found in local storage, refreshing news...');
+              // If not found in local storage, refresh the news data
+              await refreshNews(
+                settingsState.language || 'en',
+                data.location || settingsState.location // Use notification location or user's location
+              );
+              
+              // After refresh, try to find the article again
+              const refreshedArticle = await StorageService.findArticleById(data.articleId);
+              if (refreshedArticle) {
+                console.log('Found article after refresh:', refreshedArticle.title);
+                dispatch({ 
+                  type: 'SET_SPECIFIC_ARTICLE', 
+                  payload: refreshedArticle 
+                });
+              } else {
+                console.warn('Article not found even after refresh. ArticleId:', data.articleId);
+              }
             }
           }
           
@@ -134,7 +187,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     };
   }, [settingsState.language, settingsState.location]);
 
-  const updatePushToken = async (token: string) => {
+  const updatePushToken = async (token: string, forceEnable: boolean = false) => {
     try {
       const deviceId = await Device.deviceName;
       if (!deviceId) {
@@ -145,19 +198,25 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const existingPrefs = await supabaseService.getUserPreferences(deviceId);
       
       if (existingPrefs) {
-        // Update existing preferences
+        // Update existing preferences - preserve existing notification setting unless forcing enable
+        const notificationSetting = forceEnable ? true : existingPrefs.notifications_enabled;
+        console.log('Updating existing preferences with notifications_enabled:', notificationSetting);
+        
         await supabaseService.upsertUserPreferences(deviceId, {
           ...existingPrefs,
           push_token: token,
-          notifications_enabled: notificationsEnabled,
+          notifications_enabled: notificationSetting,
           updated_at: new Date().toISOString(),
         });
       } else {
-        // Create new preferences with default values
+        // Create new preferences - enable notifications if user granted permissions (forceEnable = true)
+        const notificationSetting = forceEnable;
+        console.log('Creating new preferences with notifications_enabled:', notificationSetting);
+        
         const newPrefs: UserPreferences = {
           device_id: deviceId,
           push_token: token,
-          notifications_enabled: notificationsEnabled,
+          notifications_enabled: notificationSetting,
           language_code: settingsState.language || 'en',
           location: settingsState.location || null,
           last_active_at: new Date().toISOString(),
@@ -176,6 +235,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const toggleNotifications = async () => {
     try {
       const newState = !notificationsEnabled;
+      console.log('Toggling notifications from', notificationsEnabled, 'to', newState);
       setNotificationsEnabled(newState);
       
       const deviceId = await Device.deviceName;
@@ -187,12 +247,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const existingPrefs = await supabaseService.getUserPreferences(deviceId);
       
       if (existingPrefs) {
+        console.log('Updating existing preferences with notifications_enabled:', newState);
         await supabaseService.upsertUserPreferences(deviceId, {
           ...existingPrefs,
           notifications_enabled: newState,
           updated_at: new Date().toISOString(),
         });
       } else {
+        console.log('Creating new preferences with notifications_enabled:', newState);
         const newPrefs: UserPreferences = {
           device_id: deviceId,
           push_token: expoPushToken || null,
@@ -206,6 +268,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         };
         await supabaseService.upsertUserPreferences(deviceId, newPrefs);
       }
+      
+      console.log('Successfully updated notification preferences');
     } catch (error) {
       console.error('Failed to toggle notifications:', error);
       setError(error as Error);
@@ -218,25 +282,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     console.log('Testing notification tap for article ID:', articleId);
     
     try {
-      // First try to find the article in local storage
-      const localArticle = await StorageService.findArticleById(articleId);
+      // Check current app state to determine behavior
+      const currentAppState = AppState.currentState;
+      console.log('Current app state during test:', currentAppState);
       
-      if (localArticle) {
-        console.log('Found article in local storage:', localArticle.title);
-        // If found in local storage, display it immediately
-        dispatch({ 
-          type: 'SET_SPECIFIC_ARTICLE', 
-          payload: localArticle 
-        });
-      } else {
-        console.log('Article not found in local storage, refreshing news...');
-        // If not found in local storage, refresh the news data
+      const isAppInForeground = currentAppState === 'active';
+      
+      if (isAppInForeground) {
+        // App is already open - always refresh local store with latest news
+        console.log('App is in foreground - refreshing local store with latest news...');
         await refreshNews(
           settingsState.language || 'en',
-          settingsState.location // Pass location directly, it will be null if not specified
+          settingsState.location // Use current user location for test
         );
         
-        // After refresh, try to find the article again
+        // After refresh, find the article
         const refreshedArticle = await StorageService.findArticleById(articleId);
         if (refreshedArticle) {
           console.log('Found article after refresh:', refreshedArticle.title);
@@ -247,13 +307,47 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         } else {
           console.warn('Article not found even after refresh. ArticleId:', articleId);
         }
+      } else {
+        // App was not open - use existing logic (refresh only if article not found locally)
+        console.log('App was not in foreground - checking local storage first...');
+        
+        // First try to find the article in local storage
+        const localArticle = await StorageService.findArticleById(articleId);
+        
+        if (localArticle) {
+          console.log('Found article in local storage:', localArticle.title);
+          // If found in local storage, display it immediately
+          dispatch({ 
+            type: 'SET_SPECIFIC_ARTICLE', 
+            payload: localArticle 
+          });
+        } else {
+          console.log('Article not found in local storage, refreshing news...');
+          // If not found in local storage, refresh the news data
+          await refreshNews(
+            settingsState.language || 'en',
+            settingsState.location // Use current user location for test
+          );
+          
+          // After refresh, try to find the article again
+          const refreshedArticle = await StorageService.findArticleById(articleId);
+          if (refreshedArticle) {
+            console.log('Found article after refresh:', refreshedArticle.title);
+            dispatch({ 
+              type: 'SET_SPECIFIC_ARTICLE', 
+              payload: refreshedArticle 
+            });
+          } else {
+            console.warn('Article not found even after refresh. ArticleId:', articleId);
+          }
+        }
       }
       
       // Navigate to the news screen
       console.log('Navigating to home screen...');
       router.push('/');
     } catch (error) {
-      console.error('Error testing notification tap:', error);
+      console.error('Error in test notification tap:', error);
     }
   };
 

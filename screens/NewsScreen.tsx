@@ -25,14 +25,15 @@ export default function NewsScreen() {
     state: { articles, loading, error, refreshing, currentIndex, shouldScrollToTop },
     dispatch,
     refreshNews,
-    loadMoreNews,
+    loadNewerNews,
+    loadOlderNews,
   } = useNews();
 
   const { isInitialized, isInitializing, hasLoadedInitialNews, settingsState } = useSettingsInitialization();
   const { colors } = useTheme();
   const flatListRef = useRef<FlatList>(null);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isLoadingPrevious, setIsLoadingPrevious] = useState(false);
+  const [isLoadingNewer, setIsLoadingNewer] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
   // Handle scrolling to specific article from notification
   useEffect(() => {
@@ -70,46 +71,50 @@ export default function NewsScreen() {
   }, [dispatch]);
 
   const handleRefresh = useCallback(async () => {
-    if (settingsState.language && settingsState.location) {
+    if (settingsState.language) {
       await refreshNews(settingsState.language, settingsState.location);
     }
   }, [settingsState.language, settingsState.location, refreshNews]);
 
-  const handleLoadMore = useCallback(async () => {
-    if (settingsState.language && settingsState.location && !loading && !isLoadingMore) {
-      setIsLoadingMore(true);
+  // Load newer articles (when user pulls down from top)
+  const handleLoadNewer = useCallback(async () => {
+    if (settingsState.language && !loading && !isLoadingNewer) {
+      setIsLoadingNewer(true);
       try {
-        await loadMoreNews(settingsState.language, settingsState.location, 'down');
+        console.log('User pulled down - loading newer articles');
+        await loadNewerNews(settingsState.language, settingsState.location);
       } finally {
-        setIsLoadingMore(false);
+        setIsLoadingNewer(false);
       }
     }
-  }, [settingsState.language, settingsState.location, loading, loadMoreNews, isLoadingMore]);
+  }, [settingsState.language, settingsState.location, loading, loadNewerNews, isLoadingNewer]);
 
-  const handleLoadPrevious = useCallback(async () => {
-    if (settingsState.language && settingsState.location && !loading && !isLoadingPrevious) {
-      setIsLoadingPrevious(true);
+  // Load older articles (when user scrolls up from bottom)
+  const handleLoadOlder = useCallback(async () => {
+    if (settingsState.language && !loading && !isLoadingOlder) {
+      setIsLoadingOlder(true);
       try {
-        await loadMoreNews(settingsState.language, settingsState.location, 'up');
+        console.log('User scrolled up - loading older articles');
+        await loadOlderNews(settingsState.language, settingsState.location);
       } finally {
-        setIsLoadingPrevious(false);
+        setIsLoadingOlder(false);
       }
     }
-  }, [settingsState.language, settingsState.location, loading, loadMoreNews, isLoadingPrevious]);
+  }, [settingsState.language, settingsState.location, loading, loadOlderNews, isLoadingOlder]);
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
     
-    // Check if we're at the top
-    if (contentOffset.y <= 0 && !refreshing) {
-      handleLoadPrevious();
+    // Check if we're at the top (user can pull down for newer articles)
+    if (contentOffset.y <= -50 && !refreshing && !isLoadingNewer) {
+      handleLoadNewer();
     }
     
-    // Check if we're at the bottom
-    if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 20) {
-      handleLoadMore();
+    // Check if we're near the bottom (load older articles)
+    if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 200 && !isLoadingOlder) {
+      handleLoadOlder();
     }
-  }, [handleLoadMore, handleLoadPrevious, refreshing]);
+  }, [handleLoadNewer, handleLoadOlder, refreshing, isLoadingNewer, isLoadingOlder]);
 
   const renderNewsCard = ({ item, index }: { item: NewsArticle; index: number }) => (
     <NewsCard
@@ -207,12 +212,12 @@ export default function NewsScreen() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
         ListEmptyComponent={renderEmptyState()}
-        ListHeaderComponent={isLoadingPrevious ? (
+        ListHeaderComponent={isLoadingNewer ? (
           <View style={styles.loadingIndicator}>
             <ActivityIndicator size="small" color={colors.primary} />
           </View>
         ) : null}
-        ListFooterComponent={isLoadingMore ? (
+        ListFooterComponent={isLoadingOlder ? (
           <View style={styles.loadingIndicator}>
             <ActivityIndicator size="small" color={colors.primary} />
           </View>

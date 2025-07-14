@@ -2,7 +2,25 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Config } from '@/constants/Config';
 import { NewsArticle, LanguageConfig, LocationConfig } from '@/types/news.types';
 
-// Database types
+// Partial article interface for Supabase joins
+interface PartialDatabaseNewsArticle {
+  id: number;
+  location: string;
+  source_channel: string;
+  article_url: string;
+  image_url: string | null;
+  category: string | null;
+}
+
+// Partial translation interface for Supabase joins
+interface PartialDatabaseNewsArticleTranslation {
+  article_id: number;
+  title: string;
+  description: string;
+  published_at: string;
+  language_code: string;
+}
+
 export interface DatabaseNewsArticle {
   id: number;
   location: string;
@@ -110,6 +128,28 @@ class SupabaseService {
     };
   }
 
+  // Convert partial article from join to app format
+  private convertPartialToNewsArticle(
+    partialArticle: PartialDatabaseNewsArticle, 
+    translation: PartialDatabaseNewsArticleTranslation
+  ): NewsArticle {
+    return {
+      id: partialArticle.id,
+      title: translation.title,
+      description: translation.description,
+      url: partialArticle.article_url,
+      image: partialArticle.image_url || '',
+      publishedAt: translation.published_at,
+      source: {
+        name: partialArticle.source_channel,
+        url: partialArticle.article_url,
+      },
+      location: partialArticle.location,
+      category: partialArticle.category || undefined,
+      languageCode: translation.language_code,
+    };
+  }
+
   // Fetch a specific article by ID with translation
   async fetchArticleById(
     articleId: number,
@@ -164,19 +204,21 @@ class SupabaseService {
     }
   }
 
-  // Fetch news articles from database with language and location filtering
+  // Fetch news with bidirectional loading support
   async fetchNews(
     languageCode: string = 'en',
     location: string | null = null,
-    limit: number = Config.APP.TARGET_ARTICLES_COUNT,
-    offset: number = 0,
-    direction: 'up' | 'down' = 'down'
+    limit: number = Config.APP.INITIAL_LOAD_COUNT,
+    fromArticleId: number | null = null, // null = get latest, number = get articles relative to this ID
+    direction: 'newer' | 'older' = 'newer' // newer = articles with ID > fromArticleId, older = articles with ID < fromArticleId
   ): Promise<NewsArticle[]> {
     if (!this.isClientReady()) {
       throw new Error('Supabase client not ready');
     }
 
     try {
+      console.log(`Fetching ${direction} articles, limit: ${limit}, fromArticleId: ${fromArticleId}, language: ${languageCode}, location: ${location}`);
+
       let query = this.client!
         .from('news_article_translation')
         .select(`
@@ -196,16 +238,21 @@ class SupabaseService {
         `)
         .eq('language_code', languageCode);
 
-      // Add location filter only if location is specified
-      if (location) {
+      // Add location filter only if location is specified and not 'all'
+      if (location && location !== 'all') {
         query = query.eq('news_article.location', location);
       }
 
-      // Add ID-based pagination based on direction
-      if (direction === 'up') {
-        query = query.lt('article_id', offset).order('article_id', { ascending: false });
+      // Handle pagination based on direction
+      if (fromArticleId === null) {
+        // Initial load - get the latest articles
+        query = query.order('article_id', { ascending: false });
+      } else if (direction === 'newer') {
+        // Get articles newer than fromArticleId (higher IDs)
+        query = query.gt('article_id', fromArticleId).order('article_id', { ascending: false });
       } else {
-        query = query.gt('article_id', offset).order('article_id', { ascending: true });
+        // Get articles older than fromArticleId (lower IDs) 
+        query = query.lt('article_id', fromArticleId).order('article_id', { ascending: false });
       }
 
       const { data: translationData, error: translationError } = await query.limit(limit);
@@ -215,14 +262,62 @@ class SupabaseService {
         throw translationError;
       }
 
+      if (!translationData || translationData.length === 0) {
+        console.log('No articles found');
+        return [];
+      }
+
       // Convert to NewsArticle format
       const articles: NewsArticle[] = translationData
         .filter(translation => translation.news_article) // Filter out any translations without articles
-        .map(translation => this.convertToNewsArticle(translation.news_article, translation));
+        .map(translation => {
+          // Handle Supabase join - news_article might be an array or object
+          const article = Array.isArray(translation.news_article) 
+            ? translation.news_article[0] 
+            : translation.news_article;
+          return this.convertPartialToNewsArticle(article, translation);
+        });
 
-      return direction === 'up' ? articles.reverse() : articles;
+      console.log(`Fetched ${articles.length} articles. Article IDs: ${articles.map(a => a.id).join(', ')}`);
+      
+      return articles; // Always return in descending order (newest first)
     } catch (error) {
       console.error('Failed to fetch news:', error);
+      throw error;
+    }
+  }
+
+  // Get the latest article ID for a given language/location
+  async getLatestArticleId(
+    languageCode: string = 'en',
+    location: string | null = null
+  ): Promise<number | null> {
+    if (!this.isClientReady()) {
+      throw new Error('Supabase client not ready');
+    }
+
+    try {
+      let query = this.client!
+        .from('news_article_translation')
+        .select('article_id')
+        .eq('language_code', languageCode);
+
+      if (location && location !== 'all') {
+        query = query.eq('news_article.location', location);
+      }
+
+      const { data, error } = await query
+        .order('article_id', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error getting latest article ID:', error);
+        throw error;
+      }
+
+      return data && data.length > 0 ? data[0].article_id : null;
+    } catch (error) {
+      console.error('Failed to get latest article ID:', error);
       throw error;
     }
   }
@@ -287,6 +382,7 @@ class SupabaseService {
       return data.map((loc: DatabaseLocationConfig) => ({
         id: loc.id,
         locationName: loc.location_name,
+        shortName: loc.location_name.toLowerCase().substring(0, 2), // Generate shortName from location name
         isActive: loc.is_active,
       }));
     } catch (error) {

@@ -29,7 +29,7 @@ export interface NewsState {
   refreshing: boolean;
   currentIndex: number;
   selectedLanguage: string;
-  selectedLocation: string;
+  selectedLocation: string | null;
   totalArticlesCount: number;
   shouldScrollToTop: boolean;
 }

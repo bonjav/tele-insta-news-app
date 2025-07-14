@@ -8,13 +8,15 @@ interface NewsContextType {
   state: NewsState;
   dispatch: React.Dispatch<NewsAction>;
   refreshNews: (language: string, location: string | null) => Promise<void>;
-  loadMoreNews: (language: string, location: string | null, direction: 'up' | 'down') => Promise<void>;
+  loadNewerNews: (language: string, location: string | null) => Promise<void>;
+  loadOlderNews: (language: string, location: string | null) => Promise<void>;
 }
 
 type NewsAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ARTICLES'; payload: NewsArticle[] }
-  | { type: 'ADD_ARTICLES'; payload: { articles: NewsArticle[], position: 'start' | 'end' } }
+  | { type: 'ADD_NEWER_ARTICLES'; payload: NewsArticle[] }
+  | { type: 'ADD_OLDER_ARTICLES'; payload: NewsArticle[] }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_REFRESHING'; payload: boolean }
   | { type: 'SET_CURRENT_INDEX'; payload: number }
@@ -22,7 +24,6 @@ type NewsAction =
   | { type: 'SET_LOCATION'; payload: string | null }
   | { type: 'SET_SPECIFIC_ARTICLE'; payload: NewsArticle }
   | { type: 'CLEAR_SPECIFIC_ARTICLE_FLAG' }
-  | { type: 'REMOVE_OLD_ARTICLES'; payload: number }
   | { type: 'RESET_STATE' };
 
 const initialState: NewsState = {
@@ -44,14 +45,21 @@ function newsReducer(state: NewsState, action: NewsAction): NewsState {
     case 'SET_LOADING':
       return { ...state, loading: action.payload };
     case 'SET_ARTICLES':
-      return { ...state, articles: action.payload };
-    case 'ADD_ARTICLES':
-      return {
-        ...state,
-        articles: action.payload.position === 'start'
-          ? [...action.payload.articles, ...state.articles]
-          : [...state.articles, ...action.payload.articles]
-      };
+      // Sort articles by ID descending (newest first)
+      const sortedArticles = [...action.payload].sort((a, b) => b.id - a.id);
+      return { ...state, articles: sortedArticles };
+    case 'ADD_NEWER_ARTICLES':
+      // Add newer articles to the beginning, remove duplicates, sort
+      const newerArticles = [...action.payload, ...state.articles]
+        .filter((article, index, self) => index === self.findIndex(a => a.id === article.id))
+        .sort((a, b) => b.id - a.id);
+      return { ...state, articles: newerArticles };
+    case 'ADD_OLDER_ARTICLES':
+      // Add older articles to the end, remove duplicates, sort
+      const olderArticles = [...state.articles, ...action.payload]
+        .filter((article, index, self) => index === self.findIndex(a => a.id === article.id))
+        .sort((a, b) => b.id - a.id);
+      return { ...state, articles: olderArticles };
     case 'SET_ERROR':
       return { ...state, error: action.payload };
     case 'SET_REFRESHING':
@@ -66,9 +74,11 @@ function newsReducer(state: NewsState, action: NewsAction): NewsState {
       // Add the article to the beginning of the list if it doesn't exist
       const exists = state.articles.some(article => article.id === action.payload.id);
       if (!exists) {
+        const articlesWithNew = [action.payload, ...state.articles]
+          .sort((a, b) => b.id - a.id);
         return {
           ...state,
-          articles: [action.payload, ...state.articles],
+          articles: articlesWithNew,
           currentIndex: 0,
           shouldScrollToTop: true
         };
@@ -82,11 +92,6 @@ function newsReducer(state: NewsState, action: NewsAction): NewsState {
       };
     case 'CLEAR_SPECIFIC_ARTICLE_FLAG':
       return { ...state, shouldScrollToTop: false };
-    case 'REMOVE_OLD_ARTICLES':
-      return {
-        ...state,
-        articles: state.articles.slice(0, action.payload)
-      };
     case 'RESET_STATE':
       return initialState;
     default:
@@ -101,33 +106,46 @@ interface NewsProviderProps {
 export function NewsProvider({ children }: NewsProviderProps) {
   const [state, dispatch] = useReducer(newsReducer, initialState);
 
+  // Initial news loading - always fetch latest articles
   const refreshNews = async (language: string, location: string | null) => {
     try {
       dispatch({ type: 'SET_REFRESHING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      // Get stored articles first
+      console.log('=== REFRESH NEWS: Loading latest articles ===');
+
+      // Load from storage first for immediate display
       const storedData = await StorageService.getNewsData();
       if (storedData && storedData.articles.length > 0) {
+        console.log(`Loaded ${storedData.articles.length} articles from storage`);
         dispatch({ type: 'SET_ARTICLES', payload: storedData.articles });
       }
 
-      // Then fetch fresh articles from the database
+      // Fetch latest articles from database (newest first)
       const freshArticles = await supabaseService.fetchNews(
         language,
-        location || 'all', // Pass 'all' to supabase when location is null
-        Config.APP.TARGET_ARTICLES_COUNT,
-        0
+        location || null,
+        Config.APP.INITIAL_LOAD_COUNT,
+        null, // Get latest articles
+        'newer'
       );
 
       if (freshArticles && freshArticles.length > 0) {
+        console.log(`Fetched ${freshArticles.length} fresh articles from database`);
+        
+        // Replace storage with fresh articles
+        await StorageService.replaceAllArticles(freshArticles);
+        
+        // Update state
         dispatch({ type: 'SET_ARTICLES', payload: freshArticles });
-        // Update storage with fresh articles
-        await StorageService.saveNewsData(freshArticles);
+        
+        await StorageService.logStorageState();
       }
 
       dispatch({ type: 'SET_LANGUAGE', payload: language });
       dispatch({ type: 'SET_LOCATION', payload: location || null });
+      
+      console.log('=== REFRESH NEWS: Completed ===');
     } catch (error) {
       console.error('Error refreshing news:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to refresh news' });
@@ -136,60 +154,95 @@ export function NewsProvider({ children }: NewsProviderProps) {
     }
   };
 
-  const loadMoreNews = async (language: string, location: string | null, direction: 'up' | 'down') => {
+  // Load newer articles (swipe down)
+  const loadNewerNews = async (language: string, location: string | null) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      const currentArticles = state.articles;
-      const lastArticle = currentArticles[currentArticles.length - 1];
-      const firstArticle = currentArticles[0];
+      console.log('=== LOAD NEWER: Fetching newer articles ===');
 
-      let newArticles;
-      if (direction === 'down') {
-        newArticles = await supabaseService.fetchNews(
-          language,
-          location || 'all',
-          Config.APP.TARGET_ARTICLES_COUNT,
-          lastArticle?.id || 0,
-          'down'
-        );
+      // Get the newest article ID from storage
+      const newestId = await StorageService.getNewestArticleId();
+      if (!newestId) {
+        console.log('No articles in storage, doing initial load');
+        await refreshNews(language, location);
+        return;
+      }
+
+      // Fetch articles newer than the newest we have
+      const newerArticles = await supabaseService.fetchNews(
+        language,
+        location || null,
+        Config.APP.LOAD_MORE_BATCH_SIZE,
+        newestId,
+        'newer'
+      );
+
+      if (newerArticles && newerArticles.length > 0) {
+        console.log(`Fetched ${newerArticles.length} newer articles`);
+        
+        // Add to storage and state
+        await StorageService.addNewerArticles(newerArticles);
+        dispatch({ type: 'ADD_NEWER_ARTICLES', payload: newerArticles });
+        
+        await StorageService.logStorageState();
       } else {
-        newArticles = await supabaseService.fetchNews(
-          language,
-          location || 'all',
-          Config.APP.TARGET_ARTICLES_COUNT,
-          firstArticle?.id || 0,
-          'up'
-        );
+        console.log('No newer articles available');
       }
 
-      if (newArticles && newArticles.length > 0) {
-        dispatch({
-          type: 'ADD_ARTICLES',
-          payload: {
-            articles: newArticles,
-            position: direction === 'down' ? 'end' : 'start'
-          }
-        });
-
-        // Update storage
-        const allArticles = direction === 'down'
-          ? [...currentArticles, ...newArticles]
-          : [...newArticles, ...currentArticles];
-
-        // Remove old articles if we exceed the maximum
-        if (allArticles.length > Config.APP.MAX_ARTICLES_IN_DB) {
-          const articlesToKeep = allArticles.slice(0, Config.APP.MAX_ARTICLES_IN_DB);
-          dispatch({ type: 'REMOVE_OLD_ARTICLES', payload: Config.APP.MAX_ARTICLES_IN_DB });
-          await StorageService.saveNewsData(articlesToKeep);
-        } else {
-          await StorageService.saveNewsData(allArticles);
-        }
-      }
+      console.log('=== LOAD NEWER: Completed ===');
     } catch (error) {
-      console.error('Error loading more news:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to load more news' });
+      console.error('Error loading newer news:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to load newer news' });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  };
+
+  // Load older articles (swipe up)
+  const loadOlderNews = async (language: string, location: string | null) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      dispatch({ type: 'SET_ERROR', payload: null });
+
+      console.log('=== LOAD OLDER: Fetching older articles ===');
+
+      // Check if we need to fetch more articles from database
+      const needsMore = await StorageService.needsMoreArticles('older');
+      
+      if (needsMore) {
+        // Get the oldest article ID from storage
+        const oldestId = await StorageService.getOldestArticleId();
+        
+        // Fetch older articles from database
+        const olderArticles = await supabaseService.fetchNews(
+          language,
+          location || null,
+          Config.APP.LOAD_MORE_BATCH_SIZE,
+          oldestId,
+          'older'
+        );
+
+        if (olderArticles && olderArticles.length > 0) {
+          console.log(`Fetched ${olderArticles.length} older articles from database`);
+          
+          // Add to storage and state
+          await StorageService.addOlderArticles(olderArticles);
+          dispatch({ type: 'ADD_OLDER_ARTICLES', payload: olderArticles });
+          
+          await StorageService.logStorageState();
+        } else {
+          console.log('No older articles available in database');
+        }
+      } else {
+        console.log('Sufficient articles in storage, no database fetch needed');
+      }
+
+      console.log('=== LOAD OLDER: Completed ===');
+    } catch (error) {
+      console.error('Error loading older news:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to load older news' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -201,7 +254,8 @@ export function NewsProvider({ children }: NewsProviderProps) {
         state,
         dispatch,
         refreshNews,
-        loadMoreNews,
+        loadNewerNews,
+        loadOlderNews,
       }}
     >
       {children}
