@@ -10,10 +10,12 @@ import {
   Alert,
   Share,
   Platform,
+  ShareContent,
 } from 'react-native';
 import { ExternalLink, Share2, User } from 'lucide-react-native';
 import { NewsArticle } from '@/types/news.types';
 import { useTheme } from '@/contexts/ThemeContext';
+import * as FileSystem from 'expo-file-system';
 
 // Import notification icon
 const notificationIcon = require('@/assets/images/notification-icon.png');
@@ -44,12 +46,45 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
 
   const handleShare = async () => {
     try {
-      await Share.share({
+      let shareOptions: ShareContent = {
         message: `${article.title}\n\n${article.description}\n\nRead more: ${article.url}`,
         title: article.title,
-        url: article.url,
-      });
+      };
+
+      // If we have an image URL and no image error occurred, try to share the image
+      if (article.image && !imageError) {
+        try {
+          // Download the image to cache directory
+          const filename = `article-${article.id}.jpg`;
+          const destinationUri = `${FileSystem.cacheDirectory}${filename}`;
+          
+          await FileSystem.downloadAsync(
+            article.image,
+            destinationUri
+          );
+
+          // Add the image to share options
+          shareOptions = {
+            ...shareOptions,
+            url: Platform.OS === 'ios' ? destinationUri : `file://${destinationUri}`,
+          };
+
+          // Share with image
+          await Share.share(shareOptions);
+
+          // Clean up the cached image
+          await FileSystem.deleteAsync(destinationUri, { idempotent: true });
+        } catch (imageError) {
+          console.warn('Failed to share image:', imageError);
+          // If image sharing fails, fall back to text-only sharing
+          await Share.share(shareOptions);
+        }
+      } else {
+        // If no image or image error, share text only
+        await Share.share(shareOptions);
+      }
     } catch (error) {
+      console.error('Share error:', error);
       Alert.alert('Error', 'Failed to share article');
     }
   };
@@ -107,12 +142,10 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
       </View>
 
       {/* Link Section - positioned just above bottom bar */}
-      <View style={styles.linkSection}>
         <TouchableOpacity style={styles.readMoreButton} onPress={handleOpenLink}>
           <ExternalLink size={18} color={colors.primary} />
           <Text style={styles.readMoreText}>View Full Article at {article.source.name}</Text>
         </TouchableOpacity>
-      </View>
 
       {/* Swipe Indicators */}
       <View style={styles.swipeIndicator}>

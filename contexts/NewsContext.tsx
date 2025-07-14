@@ -7,8 +7,8 @@ import { Config } from '@/constants/Config';
 interface NewsContextType {
   state: NewsState;
   dispatch: React.Dispatch<NewsAction>;
-  refreshNews: (language: string, location: string) => Promise<void>;
-  loadMoreNews: (language: string, location: string, direction: 'up' | 'down') => Promise<void>;
+  refreshNews: (language: string, location: string | null) => Promise<void>;
+  loadMoreNews: (language: string, location: string | null, direction: 'up' | 'down') => Promise<void>;
 }
 
 type NewsAction =
@@ -19,7 +19,7 @@ type NewsAction =
   | { type: 'SET_REFRESHING'; payload: boolean }
   | { type: 'SET_CURRENT_INDEX'; payload: number }
   | { type: 'SET_LANGUAGE'; payload: string }
-  | { type: 'SET_LOCATION'; payload: string }
+  | { type: 'SET_LOCATION'; payload: string | null }
   | { type: 'SET_SPECIFIC_ARTICLE'; payload: NewsArticle }
   | { type: 'REMOVE_OLD_ARTICLES'; payload: number }
   | { type: 'RESET_STATE' };
@@ -31,7 +31,7 @@ const initialState: NewsState = {
   refreshing: false,
   currentIndex: 0,
   selectedLanguage: 'en',
-  selectedLocation: 'all',
+  selectedLocation: null,
   totalArticlesCount: 0,
 };
 
@@ -90,7 +90,7 @@ interface NewsProviderProps {
 export function NewsProvider({ children }: NewsProviderProps) {
   const [state, dispatch] = useReducer(newsReducer, initialState);
 
-  const refreshNews = async (language: string, location: string) => {
+  const refreshNews = async (language: string, location: string | null) => {
     try {
       dispatch({ type: 'SET_REFRESHING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
@@ -104,7 +104,7 @@ export function NewsProvider({ children }: NewsProviderProps) {
       // Then fetch fresh articles from the database
       const freshArticles = await supabaseService.fetchNews(
         language,
-        location,
+        location || 'all', // Pass 'all' to supabase when location is null
         Config.APP.TARGET_ARTICLES_COUNT,
         0
       );
@@ -116,7 +116,7 @@ export function NewsProvider({ children }: NewsProviderProps) {
       }
 
       dispatch({ type: 'SET_LANGUAGE', payload: language });
-      dispatch({ type: 'SET_LOCATION', payload: location });
+      dispatch({ type: 'SET_LOCATION', payload: location || null });
     } catch (error) {
       console.error('Error refreshing news:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to refresh news' });
@@ -125,7 +125,7 @@ export function NewsProvider({ children }: NewsProviderProps) {
     }
   };
 
-  const loadMoreNews = async (language: string, location: string, direction: 'up' | 'down') => {
+  const loadMoreNews = async (language: string, location: string | null, direction: 'up' | 'down') => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
@@ -138,7 +138,7 @@ export function NewsProvider({ children }: NewsProviderProps) {
       if (direction === 'down') {
         newArticles = await supabaseService.fetchNews(
           language,
-          location,
+          location || 'all',
           Config.APP.TARGET_ARTICLES_COUNT,
           lastArticle?.id || 0,
           'down'
@@ -146,7 +146,7 @@ export function NewsProvider({ children }: NewsProviderProps) {
       } else {
         newArticles = await supabaseService.fetchNews(
           language,
-          location,
+          location || 'all',
           Config.APP.TARGET_ARTICLES_COUNT,
           firstArticle?.id || 0,
           'up'

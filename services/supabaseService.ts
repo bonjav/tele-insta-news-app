@@ -167,7 +167,7 @@ class SupabaseService {
   // Fetch news articles from database with language and location filtering
   async fetchNews(
     languageCode: string = 'en',
-    location: string = 'all',
+    location: string | null = null,
     limit: number = Config.APP.TARGET_ARTICLES_COUNT,
     offset: number = 0,
     direction: 'up' | 'down' = 'down'
@@ -196,8 +196,8 @@ class SupabaseService {
         `)
         .eq('language_code', languageCode);
 
-      // Add location filter if not 'all'
-      if (location !== 'all') {
+      // Add location filter only if location is specified
+      if (location) {
         query = query.eq('news_article.location', location);
       }
 

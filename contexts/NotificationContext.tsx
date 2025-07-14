@@ -15,6 +15,7 @@ import { AppState } from 'react-native';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useRouter } from 'expo-router';
 import { useNews } from '@/contexts/NewsContext';
+import { StorageService } from '@/services/storageService';
 
 // Import UserPreferences type directly from supabaseService
 import type { UserPreferences } from '@/services/supabaseService';
@@ -46,7 +47,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const responseListener = useRef<Subscription>();
   const { state: settingsState } = useSettings();
   const router = useRouter();
-  const { setSpecificArticle } = useNews();
+  const { dispatch, refreshNews } = useNews();
 
   useEffect(() => {
     registerForPushNotificationsAsync().then(token => {
@@ -63,20 +64,48 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setNotification(notification);
     });
 
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data as { articleId?: number; languageCode?: string };
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(async response => {
+      const data = response.notification.request.content.data as { 
+        articleId: number;
+        location: string;
+        category: string;
+        imageUrl: string;
+        notificationId: string;
+      };
       
       if (data.articleId) {
-        // Load the article in the specified language or user's preferred language
-        setSpecificArticle(
-          data.articleId,
-          data.languageCode || settingsState.language || 'en'
-        ).then(() => {
+        try {
+          // First try to find the article in local storage
+          const localArticle = await StorageService.findArticleById(data.articleId);
+          
+          if (localArticle) {
+            // If found in local storage, display it immediately
+            dispatch({ 
+              type: 'SET_SPECIFIC_ARTICLE', 
+              payload: localArticle 
+            });
+          } else {
+            // If not found in local storage, refresh the news data
+            await refreshNews(
+              settingsState.language || 'en',
+              data.location // Pass location directly, it will be null if not specified
+            );
+            
+            // After refresh, try to find the article again
+            const refreshedArticle = await StorageService.findArticleById(data.articleId);
+            if (refreshedArticle) {
+              dispatch({ 
+                type: 'SET_SPECIFIC_ARTICLE', 
+                payload: refreshedArticle 
+              });
+            }
+          }
+          
           // Navigate to the news screen
           router.push('/');
-        }).catch(error => {
-          console.error('Error loading notification article:', error);
-        });
+        } catch (error) {
+          console.error('Error handling notification tap:', error);
+        }
       }
     });
 
@@ -88,7 +117,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         Notifications.removeNotificationSubscription(responseListener.current);
       }
     };
-  }, [settingsState.language]);
+  }, [settingsState.language, settingsState.location]);
 
   const updatePushToken = async (token: string) => {
     try {
@@ -115,6 +144,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           push_token: token,
           notifications_enabled: notificationsEnabled,
           language_code: settingsState.language || 'en',
+          location: settingsState.location || null,
           last_active_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -153,6 +183,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           push_token: expoPushToken || null,
           notifications_enabled: newState,
           language_code: settingsState.language || 'en',
+          location: settingsState.location || null,
           last_active_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
