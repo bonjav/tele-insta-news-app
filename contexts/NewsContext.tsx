@@ -71,11 +71,19 @@ function newsReducer(state: NewsState, action: NewsAction): NewsState {
     case 'SET_LOCATION':
       return { ...state, selectedLocation: action.payload };
     case 'SET_SPECIFIC_ARTICLE':
+      console.log('📰 SET_SPECIFIC_ARTICLE - Action received for article:', action.payload.title, 'with ID:', action.payload.id);
+      console.log('📰 SET_SPECIFIC_ARTICLE - Current articles count:', state.articles.length);
+      
       // Add the article to the beginning of the list if it doesn't exist
       const exists = state.articles.some(article => article.id === action.payload.id);
+      console.log('📰 SET_SPECIFIC_ARTICLE - Article exists in current articles:', exists);
+      
       if (!exists) {
+        console.log('📰 SET_SPECIFIC_ARTICLE - Adding new article to beginning of list');
         const articlesWithNew = [action.payload, ...state.articles]
           .sort((a, b) => b.id - a.id);
+        console.log('📰 SET_SPECIFIC_ARTICLE - New articles count:', articlesWithNew.length);
+        console.log('📰 SET_SPECIFIC_ARTICLE - Setting currentIndex to 0 and shouldScrollToTop to true');
         return {
           ...state,
           articles: articlesWithNew,
@@ -85,12 +93,15 @@ function newsReducer(state: NewsState, action: NewsAction): NewsState {
       }
       // If article exists, just set it as current and scroll to it
       const existingIndex = state.articles.findIndex(article => article.id === action.payload.id);
+      console.log('📰 SET_SPECIFIC_ARTICLE - Article found at existing index:', existingIndex);
+      console.log('📰 SET_SPECIFIC_ARTICLE - Setting currentIndex to', existingIndex, 'and shouldScrollToTop to true');
       return {
         ...state,
         currentIndex: existingIndex,
         shouldScrollToTop: true
       };
     case 'CLEAR_SPECIFIC_ARTICLE_FLAG':
+      console.log('🏁 CLEAR_SPECIFIC_ARTICLE_FLAG - Clearing shouldScrollToTop flag');
       return { ...state, shouldScrollToTop: false };
     case 'RESET_STATE':
       return initialState;

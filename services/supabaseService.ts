@@ -155,7 +155,10 @@ class SupabaseService {
     articleId: number,
     languageCode: string = 'en'
   ): Promise<NewsArticle | null> {
+    console.log('🗃️ DATABASE - Fetching article by ID:', articleId, 'with language:', languageCode);
+    
     if (!this.isClientReady()) {
+      console.error('🗃️ DATABASE - Supabase client not ready');
       throw new Error('Supabase client not ready');
     }
 
@@ -168,13 +171,16 @@ class SupabaseService {
         .single();
 
       if (articleError) {
-        console.error('Error fetching article:', articleError);
+        console.error('🗃️ DATABASE - Error fetching article:', articleError);
         throw articleError;
       }
 
       if (!article) {
+        console.log('🗃️ DATABASE - Article not found in database');
         return null;
       }
+
+      console.log('🗃️ DATABASE - Article found:', article.title || 'No title');
 
       // Fetch the translation
       const { data: translation, error: translationError } = await this.client!
@@ -185,21 +191,24 @@ class SupabaseService {
         .single();
 
       if (translationError) {
-        console.error('Error fetching translation:', translationError);
+        console.error('🗃️ DATABASE - Error fetching translation:', translationError);
         throw translationError;
       }
 
       if (!translation) {
-        // If translation not found in requested language, try English
-        if (languageCode !== 'en') {
-          return this.fetchArticleById(articleId, 'en');
-        }
+        console.log('🗃️ DATABASE - Translation not found for language:', languageCode);
         return null;
       }
 
-      return this.convertToNewsArticle(article, translation);
+      console.log('🗃️ DATABASE - Translation found:', translation.title || 'No title');
+
+      // Convert to app format
+      const result = this.convertToNewsArticle(article, translation);
+      console.log('🗃️ DATABASE - Converted article:', result.title);
+      
+      return result;
     } catch (error) {
-      console.error('Failed to fetch article by ID:', error);
+      console.error('🗃️ DATABASE - Error in fetchArticleById:', error);
       throw error;
     }
   }

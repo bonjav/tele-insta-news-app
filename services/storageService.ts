@@ -187,13 +187,24 @@ export class StorageService {
   }
 
   static async findArticleById(articleId: number): Promise<NewsArticle | null> {
+    console.log('🗄️ STORAGE - Finding article by ID:', articleId);
+    
     try {
       const data = await this.getNewsData();
-      if (!data) return null;
+      console.log('🗄️ STORAGE - Retrieved data:', data ? `${data.articles.length} articles` : 'null');
+      
+      if (!data) {
+        console.log('🗄️ STORAGE - No data found, returning null');
+        return null;
+      }
 
-      return data.articles.find(article => article.id === articleId) || null;
+      const foundArticle = data.articles.find(article => article.id === articleId);
+      console.log('🗄️ STORAGE - Article found:', foundArticle ? `"${foundArticle.title}"` : 'null');
+      console.log('🗄️ STORAGE - Available article IDs:', data.articles.map(a => a.id).slice(0, 10));
+      
+      return foundArticle || null;
     } catch (error) {
-      console.error('Error finding article by ID:', error);
+      console.error('🗄️ STORAGE - Error finding article by ID:', error);
       return null;
     }
   }

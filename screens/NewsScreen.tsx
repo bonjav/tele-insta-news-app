@@ -37,31 +37,93 @@ export default function NewsScreen() {
 
   // Handle scrolling to specific article from notification
   useEffect(() => {
+    console.log('📱 SCROLL EFFECT - Triggered with shouldScrollToTop:', shouldScrollToTop, 'currentIndex:', currentIndex, 'articles.length:', articles.length);
+    
     if (shouldScrollToTop && flatListRef.current && articles.length > 0) {
-      console.log('Scrolling to article at index:', currentIndex, 'of', articles.length);
+      console.log('📱 SCROLL EFFECT - Conditions met, attempting to scroll to index:', currentIndex, 'of', articles.length);
       
       // Use setTimeout to ensure the FlatList has rendered the new articles
       setTimeout(() => {
+        console.log('📱 SCROLL EFFECT - Timeout executed, checking conditions again...');
+        console.log('📱 SCROLL EFFECT - flatListRef.current exists:', !!flatListRef.current);
+        console.log('📱 SCROLL EFFECT - currentIndex:', currentIndex, 'articles.length:', articles.length);
+        
         try {
           if (currentIndex >= 0 && currentIndex < articles.length) {
+            console.log('📱 SCROLL EFFECT - Attempting scrollToIndex with index:', currentIndex);
             flatListRef.current?.scrollToIndex({
               index: currentIndex,
               animated: true,
             });
-            console.log('Successfully scrolled to index:', currentIndex);
+            console.log('📱 SCROLL EFFECT - Successfully scrolled to index:', currentIndex);
           } else {
-            console.warn('Invalid currentIndex:', currentIndex, 'for articles length:', articles.length);
+            console.warn('📱 SCROLL EFFECT - Invalid currentIndex:', currentIndex, 'for articles length:', articles.length);
+            // Try to scroll to top as fallback
+            console.log('📱 SCROLL EFFECT - Attempting fallback scroll to top');
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
           }
         } catch (error) {
-          console.error('Error scrolling to index:', error);
+          console.error('📱 SCROLL EFFECT - Error scrolling to index:', error);
           // Fallback to scrolling to top
-          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+          try {
+            console.log('📱 SCROLL EFFECT - Attempting fallback scroll to top after error');
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+          } catch (fallbackError) {
+            console.error('📱 SCROLL EFFECT - Fallback scroll also failed:', fallbackError);
+          }
         }
         // Clear the flag after scrolling
+        console.log('📱 SCROLL EFFECT - Clearing shouldScrollToTop flag');
         dispatch({ type: 'CLEAR_SPECIFIC_ARTICLE_FLAG' });
-      }, 100);
+      }, 200); // Increased timeout for better reliability
+    } else {
+      console.log('📱 SCROLL EFFECT - Conditions not met:', {
+        shouldScrollToTop,
+        flatListRefExists: !!flatListRef.current,
+        articlesLength: articles.length
+      });
     }
   }, [shouldScrollToTop, currentIndex, articles.length, dispatch]);
+
+  // Additional effect to ensure scrolling happens even if the first attempt fails
+  useEffect(() => {
+    console.log('📱 BACKUP SCROLL EFFECT - Triggered with shouldScrollToTop:', shouldScrollToTop, 'articles.length:', articles.length);
+    
+    if (shouldScrollToTop && articles.length > 0) {
+      console.log('📱 BACKUP SCROLL EFFECT - Conditions met, setting backup scroll timeout');
+      
+      // Double-check after a longer delay
+      setTimeout(() => {
+        console.log('📱 BACKUP SCROLL EFFECT - Backup timeout executed');
+        console.log('📱 BACKUP SCROLL EFFECT - flatListRef.current exists:', !!flatListRef.current);
+        console.log('📱 BACKUP SCROLL EFFECT - currentIndex:', currentIndex, 'articles.length:', articles.length);
+        
+        if (flatListRef.current && currentIndex >= 0 && currentIndex < articles.length) {
+          try {
+            console.log('📱 BACKUP SCROLL EFFECT - Attempting backup scroll to index:', currentIndex);
+            flatListRef.current?.scrollToIndex({
+              index: currentIndex,
+              animated: true,
+            });
+            console.log('📱 BACKUP SCROLL EFFECT - Backup scroll to index successful:', currentIndex);
+          } catch (error) {
+            console.error('📱 BACKUP SCROLL EFFECT - Backup scroll failed:', error);
+            // Final fallback to top
+            try {
+              console.log('📱 BACKUP SCROLL EFFECT - Attempting final fallback scroll to top');
+              flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+            } catch (fallbackError) {
+              console.error('📱 BACKUP SCROLL EFFECT - Final fallback scroll also failed:', fallbackError);
+            }
+          }
+        } else {
+          console.log('📱 BACKUP SCROLL EFFECT - Backup scroll conditions not met');
+        }
+      }, 1000);
+    } else {
+      console.log('📱 BACKUP SCROLL EFFECT - Conditions not met for backup scroll');
+    }
+  }, [shouldScrollToTop, currentIndex, articles.length]);
 
   const handleViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
