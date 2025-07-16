@@ -48,7 +48,7 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
   const handleShare = async () => {
     try {
       let shareOptions: ShareContent = {
-        message: `${article.title}\n\n${article.description}\n\nRead more: ${article.url}`,
+        message: `📰 News shared from DailySnapShorts\n\n${article.title}\n\n${article.description}\n\nRead more: ${article.url}`,
         title: article.title,
       };
 
