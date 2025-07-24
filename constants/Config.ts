@@ -47,6 +47,8 @@ export const Config = {
   DEBUG: {
     ENABLE_DEBUG_PANEL: process.env.EXPO_PUBLIC_ENABLE_DEBUG_PANEL === 'true' || false,
     SHOW_DEBUG_INFO: process.env.EXPO_PUBLIC_SHOW_DEBUG_INFO === 'true' || false,
+    IS_PRODUCTION: process.env.EXPO_PUBLIC_IS_PRODUCTION === 'true' || process.env.NODE_ENV === 'production',
+    SHOW_USER_ALERTS: process.env.EXPO_PUBLIC_SHOW_USER_ALERTS === 'true' && !process.env.EXPO_PUBLIC_IS_PRODUCTION,
   },
   
   // UI Configuration

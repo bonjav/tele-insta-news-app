@@ -311,7 +311,7 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
             name: loc.locationName,
           }))
         ]}
-        selectedValue={settingsState.location}
+        selectedValue={settingsState.location || 'all'}
         onSelect={handleLocationChange}
       />
 

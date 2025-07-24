@@ -12,6 +12,10 @@ export function useNewsData() {
     error: null,
     refreshing: false,
     currentIndex: 0,
+    selectedLanguage: 'en',
+    selectedLocation: null,
+    totalArticlesCount: 0,
+    shouldScrollToTop: false,
   });
 
   const [isInitialLoad, setIsInitialLoad] = useState(true);

@@ -11,12 +11,10 @@ import { Subscription } from "expo-modules-core";
 import { registerForPushNotificationsAsync } from '@/util/registerForPushNotificationsAsync';
 import { supabaseService } from '@/services/supabaseService';
 import * as Device from 'expo-device';
-import { AppState } from 'react-native';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useRouter } from 'expo-router';
 import { useNews } from '@/contexts/NewsContext';
-import { StorageService } from '@/services/storageService';
-import { Alert } from 'react-native';
+import { ArticleNavigationService } from '@/services/navigationService';
 
 // Import UserPreferences type directly from supabaseService
 import type { UserPreferences } from '@/services/supabaseService';
@@ -48,8 +46,29 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const notificationListener = useRef<Subscription>();
   const responseListener = useRef<Subscription>();
   const { state: settingsState } = useSettings();
-  const router = useRouter();
   const { dispatch, refreshNews } = useNews();
+
+  // Initialize the navigation service with dependencies (only once)
+  useEffect(() => {
+    console.log('🔔 NOTIFICATION CONTEXT - Initializing navigation service...');
+    ArticleNavigationService.initialize({
+      refreshNews,
+      dispatch,
+      language: settingsState.language || 'en',
+      location: settingsState.location
+    });
+  }, [refreshNews, dispatch]); // Remove language and location from deps to prevent frequent re-initialization
+
+  // Update navigation service when language/location changes
+  useEffect(() => {
+    console.log('🔔 NOTIFICATION CONTEXT - Updating navigation service language/location...');
+    ArticleNavigationService.initialize({
+      refreshNews,
+      dispatch,
+      language: settingsState.language || 'en',
+      location: settingsState.location
+    });
+  }, [settingsState.language, settingsState.location]);
 
   // Initialize notification state from existing user preferences
   useEffect(() => {
@@ -89,123 +108,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setNotification(notification);
     });
 
+    // Use the centralized navigation service for notification responses
     responseListener.current = Notifications.addNotificationResponseReceivedListener(async response => {
-      console.log('🔔 NOTIFICATION TAP - Response received:', response);
-      
-      const data = response.notification.request.content.data as { 
-        articleId: number;
-        location: string;
-        category: string;
-        imageUrl: string;
-        notificationId: string;
-      };
-      
-      console.log('🔔 NOTIFICATION TAP - Data:', data);
-      
-      if (data.articleId) {
-        try {
-          console.log('🔔 NOTIFICATION TAP - Looking for article with ID:', data.articleId);
-          
-          // Check current app state to determine behavior
-          const currentAppState = AppState.currentState;
-          console.log('🔔 NOTIFICATION TAP - Current app state:', currentAppState);
-          
-          const isAppInForeground = currentAppState === 'active';
-          let foundArticle: any = null;
-          
-          if (isAppInForeground) {
-            // App is already open - always refresh local store with latest news
-            console.log('🔔 NOTIFICATION TAP - App is in foreground - refreshing local store with latest news...');
-            await refreshNews(
-              settingsState.language || 'en',
-              settingsState.location // Use notification location or user's location
-            );
-            
-            // After refresh, find the article
-            foundArticle = await StorageService.findArticleById(data.articleId);
-            if (foundArticle) {
-              console.log('🔔 NOTIFICATION TAP - Found article after refresh:', foundArticle.title);
-            } else {
-              console.warn('🔔 NOTIFICATION TAP - Article not found in local storage after refresh, trying database...');
-              // Try database fallback
-              foundArticle = await supabaseService.fetchArticleById(data.articleId, settingsState.language || 'en');
-              if (foundArticle) {
-                console.log('🔔 NOTIFICATION TAP - Found article in database:', foundArticle.title);
-              }
-            }
-          } else {
-            // App was not open - use existing logic (refresh only if article not found locally)
-            console.log('🔔 NOTIFICATION TAP - App was not in foreground - checking local storage first...');
-            
-            // First try to find the article in local storage
-            foundArticle = await StorageService.findArticleById(data.articleId);
-            
-            if (foundArticle) {
-              console.log('🔔 NOTIFICATION TAP - Found article in local storage:', foundArticle.title);
-            } else {
-              console.log('🔔 NOTIFICATION TAP - Article not found in local storage, refreshing news...');
-              // If not found in local storage, refresh the news data
-              await refreshNews(
-                settingsState.language || 'en',
-                settingsState.location // Use notification location or user's location
-              );
-              
-              // After refresh, try to find the article again
-              foundArticle = await StorageService.findArticleById(data.articleId);
-              if (foundArticle) {
-                console.log('🔔 NOTIFICATION TAP - Found article after refresh:', foundArticle.title);
-              } else {
-                console.warn('🔔 NOTIFICATION TAP - Article not found in local storage after refresh, trying database...');
-                // Try database fallback
-                foundArticle = await supabaseService.fetchArticleById(data.articleId, settingsState.language || 'en');
-                if (foundArticle) {
-                  console.log('🔔 NOTIFICATION TAP - Found article in database:', foundArticle.title);
-                }
-              }
-            }
-          }
-          
-          // Navigate to the news screen first
-          console.log('🔔 NOTIFICATION TAP - Navigating to home screen...');
-          router.push('/');
-          
-          // Set the article with a delay to ensure the screen is mounted
-          if (foundArticle) {
-            console.log('🔔 NOTIFICATION TAP - Setting specific article:', foundArticle.title, 'with ID:', foundArticle.id);
-            setTimeout(() => {
-              console.log('🔔 NOTIFICATION TAP - Dispatching SET_SPECIFIC_ARTICLE action...');
-              dispatch({ 
-                type: 'SET_SPECIFIC_ARTICLE', 
-                payload: foundArticle 
-              });
-              console.log('🔔 NOTIFICATION TAP - SET_SPECIFIC_ARTICLE action dispatched!');
-            }, 500); // Give the navigation some time to complete
-          } else {
-            console.error('🔔 NOTIFICATION TAP - Article not found anywhere. ArticleId:', data.articleId);
-            // Show an alert to the user
-            setTimeout(() => {
-              Alert.alert(
-                'Article Not Found',
-                'The requested article could not be found. It may have been removed or is no longer available.',
-                [{ text: 'OK' }]
-              );
-            }, 1000);
-          }
-        } catch (error) {
-          console.error('🔔 NOTIFICATION TAP - Error handling notification tap:', error);
-          // Show an alert to the user
-          setTimeout(() => {
-            Alert.alert(
-              'Error',
-              'Failed to open the article. Please try again.',
-              [{ text: 'OK' }]
-            );
-          }, 1000);
-        }
-      } else {
-        console.warn('🔔 NOTIFICATION TAP - No articleId in notification data');
-      }
+      console.log('🔔 RESPONSE LISTENER - Received notification response');
+      await ArticleNavigationService.handleNotificationResponse(response, 'foreground-background');
     });
+
+    // Handle cold start notifications with a delay to ensure proper initialization
+    setTimeout(async () => {
+      console.log('🔔 COLD START HANDLER - Starting cold start check...');
+      await ArticleNavigationService.handleColdStartNotification();
+    }, 1000); // Wait 1 second for app to fully initialize
 
     return () => {
       if (notificationListener.current) {
@@ -215,7 +128,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         Notifications.removeNotificationSubscription(responseListener.current);
       }
     };
-  }, [settingsState.language, settingsState.location]);
+  }, []);
 
   const updatePushToken = async (token: string, forceEnable: boolean = false) => {
     try {
@@ -308,105 +221,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Simplified test method using the navigation service
   const testNotificationTap = async (articleId: number) => {
-    console.log('🧪 TEST NOTIFICATION TAP - Testing notification tap for article ID:', articleId);
-    
-    try {
-      // Check current app state to determine behavior
-      const currentAppState = AppState.currentState;
-      console.log('🧪 TEST NOTIFICATION TAP - Current app state during test:', currentAppState);
-      
-      const isAppInForeground = currentAppState === 'active';
-      let foundArticle: any = null;
-      
-      if (isAppInForeground) {
-        // App is already open - always refresh local store with latest news
-        console.log('🧪 TEST NOTIFICATION TAP - App is in foreground - refreshing local store with latest news...');
-        await refreshNews(
-          settingsState.language || 'en',
-          settingsState.location // Use current user location for test
-        );
-        
-        // After refresh, find the article
-        foundArticle = await StorageService.findArticleById(articleId);
-        if (foundArticle) {
-          console.log('🧪 TEST NOTIFICATION TAP - Found article after refresh:', foundArticle.title);
-        } else {
-          console.warn('🧪 TEST NOTIFICATION TAP - Article not found in local storage after refresh, trying database...');
-          // Try database fallback
-          foundArticle = await supabaseService.fetchArticleById(articleId, settingsState.language || 'en');
-          if (foundArticle) {
-            console.log('🧪 TEST NOTIFICATION TAP - Found article in database:', foundArticle.title);
-          }
-        }
-      } else {
-        // App was not open - use existing logic (refresh only if article not found locally)
-        console.log('🧪 TEST NOTIFICATION TAP - App was not in foreground - checking local storage first...');
-        
-        // First try to find the article in local storage
-        foundArticle = await StorageService.findArticleById(articleId);
-        
-        if (foundArticle) {
-          console.log('🧪 TEST NOTIFICATION TAP - Found article in local storage:', foundArticle.title);
-        } else {
-          console.log('🧪 TEST NOTIFICATION TAP - Article not found in local storage, refreshing news...');
-          // If not found in local storage, refresh the news data
-          await refreshNews(
-            settingsState.language || 'en',
-            settingsState.location // Use current user location for test
-          );
-          
-          // After refresh, try to find the article again
-          foundArticle = await StorageService.findArticleById(articleId);
-          if (foundArticle) {
-            console.log('🧪 TEST NOTIFICATION TAP - Found article after refresh:', foundArticle.title);
-          } else {
-            console.warn('🧪 TEST NOTIFICATION TAP - Article not found in local storage after refresh, trying database...');
-            // Try database fallback
-            foundArticle = await supabaseService.fetchArticleById(articleId, settingsState.language || 'en');
-            if (foundArticle) {
-              console.log('🧪 TEST NOTIFICATION TAP - Found article in database:', foundArticle.title);
-            }
-          }
-        }
-      }
-      
-      // Navigate to the news screen first
-      console.log('🧪 TEST NOTIFICATION TAP - Navigating to home screen...');
-      router.push('/');
-      
-      // Set the article with a delay to ensure the screen is mounted
-      if (foundArticle) {
-        console.log('🧪 TEST NOTIFICATION TAP - Setting specific article:', foundArticle.title, 'with ID:', foundArticle.id);
-        setTimeout(() => {
-          console.log('🧪 TEST NOTIFICATION TAP - Dispatching SET_SPECIFIC_ARTICLE action...');
-          dispatch({ 
-            type: 'SET_SPECIFIC_ARTICLE', 
-            payload: foundArticle 
-          });
-          console.log('🧪 TEST NOTIFICATION TAP - SET_SPECIFIC_ARTICLE action dispatched!');
-        }, 500); // Give the navigation some time to complete
-      } else {
-        console.error('🧪 TEST NOTIFICATION TAP - Article not found anywhere. ArticleId:', articleId);
-        // Show an alert to the user
-        setTimeout(() => {
-          Alert.alert(
-            'Article Not Found',
-            'The requested article could not be found. It may have been removed or is no longer available.',
-            [{ text: 'OK' }]
-          );
-        }, 1000);
-      }
-    } catch (error) {
-      console.error('🧪 TEST NOTIFICATION TAP - Error testing notification tap:', error);
-      // Show an alert to the user
-      setTimeout(() => {
-        Alert.alert(
-          'Error',
-          'Failed to test notification tap. Please try again.',
-          [{ text: 'OK' }]
-        );
-      }, 1000);
+    console.log('🧪 TEST NOTIFICATION TAP - Testing with article ID:', articleId);
+    const result = await ArticleNavigationService.testArticleNavigation(articleId);
+    if (!result.success) {
+      console.error('🧪 TEST NOTIFICATION TAP - Test failed:', result.error);
     }
   };
 

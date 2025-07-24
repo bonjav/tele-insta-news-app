@@ -11,7 +11,7 @@ export class NewsService {
       if (Config.DATA_SOURCE === 'database') {
         // Try database first
         try {
-          const articles = await supabaseService.fetchNews(limit);
+          const articles = await supabaseService.fetchNews('en', null, limit);
           if (articles.length > 0) {
             console.log(`Successfully fetched ${articles.length} articles from database`);
             return articles;
@@ -31,8 +31,9 @@ export class NewsService {
       // try to sync them to database for future use
       if (apiArticles.length > 0 && Config.DATA_SOURCE === 'database') {
         try {
-          await supabaseService.insertArticles(apiArticles);
-          console.log('Successfully synced API articles to database');
+          // TODO: Implement insertArticles method in supabaseService if needed
+          // await supabaseService.insertArticles(apiArticles);
+          console.log('API articles fetched (database sync not implemented)');
         } catch (syncError) {
           console.warn('Failed to sync articles to database:', syncError);
           // Don't throw error here, we still have the articles from API

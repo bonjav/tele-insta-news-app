@@ -78,7 +78,7 @@ export interface UserPreferences {
 }
 
 class SupabaseService {
-  private client: SupabaseClient | null = null;
+  public client: SupabaseClient | null = null;
 
   constructor() {
     this.initializeClient();

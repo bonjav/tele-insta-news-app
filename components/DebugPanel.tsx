@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, ScrollView } from 'react-native';
 import { X, Play, MapPin, Zap } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useNotifications } from '@/contexts/NotificationContext';
 import { useNews } from '@/contexts/NewsContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { locationService } from '@/services/locationService';
+import { ArticleNavigationService } from '@/services/navigationService';
+import { AlertUtils } from '@/util/alertUtils';
 
 interface DebugPanelProps {
   isVisible: boolean;
@@ -14,34 +15,68 @@ interface DebugPanelProps {
 
 export default function DebugPanel({ isVisible, onClose }: DebugPanelProps) {
   const { colors } = useTheme();
-  const { testNotificationTap } = useNotifications();
-  const { state } = useNews();
+  const { state, dispatch, refreshNews } = useNews();
   const { state: settingsState } = useSettings();
   const [testArticleId, setTestArticleId] = useState('');
+
+  // Initialize navigation service when debug panel is opened
+  React.useEffect(() => {
+    if (isVisible) {
+      console.log('🐛 DEBUG PANEL - Initializing navigation service for debug testing...');
+      ArticleNavigationService.initialize({
+        refreshNews,
+        dispatch,
+        language: settingsState.language || 'en',
+        location: settingsState.location
+      });
+    }
+  }, [isVisible, refreshNews, dispatch, settingsState.language, settingsState.location]);
 
   const handleTestNotification = async () => {
     const articleId = parseInt(testArticleId);
     if (isNaN(articleId)) {
-      Alert.alert('Invalid Article ID', 'Please enter a valid article ID number');
+      AlertUtils.showDebugAlert('Invalid Article ID', 'Please enter a valid article ID number');
       return;
     }
     
     try {
-      await testNotificationTap(articleId);
-      onClose(); // Close debug panel after test
+      console.log('🐛 DEBUG PANEL - Testing notification tap with article ID:', articleId);
+      const result = await ArticleNavigationService.testArticleNavigation(articleId);
+      
+      if (result.success) {
+        console.log('🐛 DEBUG PANEL - Test completed successfully');
+        onClose(); // Close debug panel after successful test
+      } else {
+        console.error('🐛 DEBUG PANEL - Test failed:', result.error);
+        AlertUtils.showDebugAlert('Test Failed', result.error || 'Unknown error occurred');
+      }
     } catch (error) {
-      console.error('Test notification error:', error);
-      Alert.alert('Error', 'Failed to test notification');
+      console.error('🐛 DEBUG PANEL - Test notification error:', error);
+      AlertUtils.showDebugAlert('Error', 'Failed to test notification');
     }
   };
 
   const handleTestWithFirstArticle = async () => {
     if (state.articles.length > 0) {
       const firstArticleId = state.articles[0].id;
-      await testNotificationTap(firstArticleId);
-      onClose(); // Close debug panel after test
+      console.log('🐛 DEBUG PANEL - Testing with first article ID:', firstArticleId);
+      
+      try {
+        const result = await ArticleNavigationService.testArticleNavigation(firstArticleId);
+        
+        if (result.success) {
+          console.log('🐛 DEBUG PANEL - Test with first article completed successfully');
+          onClose(); // Close debug panel after successful test
+        } else {
+          console.error('🐛 DEBUG PANEL - Test with first article failed:', result.error);
+          AlertUtils.showDebugAlert('Test Failed', result.error || 'Unknown error occurred');
+        }
+      } catch (error) {
+        console.error('🐛 DEBUG PANEL - Test with first article error:', error);
+        AlertUtils.showDebugAlert('Error', 'Failed to test with first article');
+      }
     } else {
-      Alert.alert('No Articles', 'No articles available to test with');
+      AlertUtils.showDebugAlert('No Articles', 'No articles available to test with');
     }
   };
 
@@ -49,10 +84,10 @@ export default function DebugPanel({ isVisible, onClose }: DebugPanelProps) {
     try {
       console.log('Starting location detection test from debug panel...');
       await locationService.debugLocationDetection();
-      Alert.alert('Location Test', 'Location detection test completed. Check console for results.');
+      AlertUtils.showDebugAlert('Location Test', 'Location detection test completed. Check console for results.');
     } catch (error) {
       console.error('Location detection test error:', error);
-      Alert.alert('Error', 'Failed to test location detection');
+      AlertUtils.showDebugAlert('Error', 'Failed to test location detection');
     }
   };
 

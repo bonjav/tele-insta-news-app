@@ -7,7 +7,6 @@ import {
   Dimensions,
   TouchableOpacity,
   Linking,
-  Alert,
   Share,
   Platform,
   ShareContent,
@@ -16,6 +15,7 @@ import { ExternalLink, Share2, User } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NewsArticle } from '@/types/news.types';
 import { useTheme } from '@/contexts/ThemeContext';
+import { AlertUtils } from '@/util/alertUtils';
 import * as FileSystem from 'expo-file-system';
 
 // Import notification icon
@@ -38,17 +38,19 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
       if (supported) {
         await Linking.openURL(article.url);
       } else {
-        Alert.alert('Error', 'Cannot open this link');
+        AlertUtils.logError('LinkOpening', 'Cannot open this link', article.url);
+        AlertUtils.showError('Cannot open this link');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to open link');
+      AlertUtils.logError('LinkOpening', 'Failed to open link', error);
+      AlertUtils.showError('Failed to open link');
     }
   };
 
   const handleShare = async () => {
     try {
       let shareOptions: ShareContent = {
-        message: `📰 News shared from DailySnapShorts\n\n${article.title}\n\n${article.description}\n\nRead more: ${article.url}`,
+        message: `📰 News shared from DailySnapShorts\n\n${article.title}\n\n${article.description}\n\n🔗 Read the full article here:\n${article.url}\n\n📱 Get more news on DailySnapShorts`,
         title: article.title,
       };
 
@@ -86,7 +88,8 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
       }
     } catch (error) {
       console.error('Share error:', error);
-      Alert.alert('Error', 'Failed to share article');
+      AlertUtils.logError('ArticleSharing', 'Failed to share article', error);
+      AlertUtils.showError('Failed to share article');
     }
   };
 
