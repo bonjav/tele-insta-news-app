@@ -11,7 +11,18 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build:web": "expo export --platform web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:ios": "eas build --platform ios --profile production-ios",
+    "build:android": "eas build --platform android --profile production-android",
+    "build:all": "eas build --platform all --profile production",
+    "submit:ios": "eas submit --platform ios --profile production",
+    "submit:android": "eas submit --platform android --profile production",
+    "submit:all": "eas submit --platform all --profile production",
+    "deploy:internal": "npm run build:all && npm run submit:all",
+    "deploy:production": "eas build --platform all --profile production && eas submit --platform all --profile production-release",
+    "release:patch": "npm version patch && git push && git push --tags",
+    "release:minor": "npm version minor && git push && git push --tags",
+    "release:major": "npm version major && git push && git push --tags"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.2.3",
