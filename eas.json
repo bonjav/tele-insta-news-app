@@ -26,19 +26,17 @@
         "resourceClass": "m-medium"
       },
       "android": {
-        "buildType": "aab"
+        "buildType": "app-bundle"
       },
       "env": {
         "EXPO_PUBLIC_IS_PRODUCTION": "true"
       }
     },
     "production-ios": {
-      "extends": "production",
-      "platform": "ios"
+      "extends": "production"
     },
     "production-android": {
-      "extends": "production",
-      "platform": "android"
+      "extends": "production"
     }
   },
   "submit": {

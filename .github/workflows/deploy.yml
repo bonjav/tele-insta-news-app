@@ -80,9 +80,9 @@ jobs:
       - name: 🚀 Build iOS app
         run: |
           if [[ "${{ github.event.inputs.deploy_type }}" == "production" || "${{ github.ref }}" == refs/tags/v* ]]; then
-            eas build --platform ios --profile production-ios --non-interactive
+            eas build --platform ios --profile production --non-interactive
           else
-            eas build --platform ios --profile production-ios --non-interactive
+            eas build --platform ios --profile production --non-interactive
           fi
 
   # Build for Android
@@ -118,9 +118,9 @@ jobs:
       - name: 🚀 Build Android app
         run: |
           if [[ "${{ github.event.inputs.deploy_type }}" == "production" || "${{ github.ref }}" == refs/tags/v* ]]; then
-            eas build --platform android --profile production-android --non-interactive
+            eas build --platform android --profile production --non-interactive
           else
-            eas build --platform android --profile production-android --non-interactive
+            eas build --platform android --profile production --non-interactive
           fi
 
   # Submit to App Store (iOS)
