@@ -15,6 +15,8 @@
     "android": {
       "package": "com.dailySnapShorts",
       "googleServicesFile": "./google-services.json",
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android/adaptive-icon.png",
         "backgroundColor": "#ffffff"

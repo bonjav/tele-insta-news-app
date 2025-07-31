@@ -10,6 +10,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
+import { getResponsiveLayout } from '@/util/responsiveUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import NewsCard from '@/components/NewsCard';
@@ -21,6 +22,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function NewsScreen() {
+  const responsiveLayout = getResponsiveLayout();
   const {
     state: { articles, loading, error, refreshing, currentIndex, shouldScrollToTop },
     dispatch,
@@ -179,10 +181,12 @@ export default function NewsScreen() {
   }, [handleLoadNewer, handleLoadOlder, refreshing, isLoadingNewer, isLoadingOlder]);
 
   const renderNewsCard = ({ item, index }: { item: NewsArticle; index: number }) => (
-    <NewsCard
-      article={item}
-      isActive={index === currentIndex}
-    />
+    <View style={styles.newsCardContainer}>
+      <NewsCard
+        article={item}
+        isActive={index === currentIndex}
+      />
+    </View>
   );
 
   const renderLoadingState = () => (
@@ -253,14 +257,15 @@ export default function NewsScreen() {
         data={articles}
         renderItem={renderNewsCard}
         keyExtractor={(item, index) => `${item.id}-${index}`}
-        pagingEnabled
+        pagingEnabled={true}
         showsVerticalScrollIndicator={false}
         snapToInterval={SCREEN_HEIGHT}
         snapToAlignment="start"
         decelerationRate="fast"
         onViewableItemsChanged={handleViewableItemsChanged}
         viewabilityConfig={{
-          itemVisiblePercentThreshold: 50,
+          itemVisiblePercentThreshold: 80, // Increase threshold for better single-page behavior
+          minimumViewTime: 100,
         }}
         refreshControl={
           <RefreshControl
@@ -289,10 +294,15 @@ export default function NewsScreen() {
           offset: SCREEN_HEIGHT * index,
           index,
         })}
+        contentContainerStyle={styles.flatListContent}
         removeClippedSubviews={true}
-        maxToRenderPerBatch={3}
-        windowSize={5}
-        initialNumToRender={2}
+        maxToRenderPerBatch={1} // Render only one item at a time for better memory
+        windowSize={3} // Reduce window size to focus on single item
+        initialNumToRender={1} // Only render the first item initially
+        bounces={false} // Prevent bouncing to ensure strict page boundaries
+        scrollEnabled={true}
+        nestedScrollEnabled={false} // Prevent nested scrolling conflicts
+        ItemSeparatorComponent={() => <View style={styles.articleSeparator} />}
       />
     </SafeAreaView>
   );
@@ -301,6 +311,22 @@ export default function NewsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  newsCardContainer: {
+    width: '100%',
+    height: SCREEN_HEIGHT,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    overflow: 'hidden', // Prevent any content bleed-through
+  },
+  flatListContent: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  articleSeparator: {
+    height: 0,
+    width: '100%',
+    backgroundColor: 'transparent',
   },
   loadingContainer: {
     flex: 1,

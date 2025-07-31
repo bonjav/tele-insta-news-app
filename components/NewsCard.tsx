@@ -10,12 +10,13 @@ import {
   Share,
   Platform,
   ShareContent,
+  ScrollView,
 } from 'react-native';
 import { ExternalLink, Share2, User } from 'lucide-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { NewsArticle } from '@/types/news.types';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AlertUtils } from '@/util/alertUtils';
+import { getResponsiveLayout, getDeviceStyles, getDeviceInfo, getAvailableContentHeight } from '@/util/responsiveUtils';
 import * as FileSystem from 'expo-file-system';
 
 // Import notification icon
@@ -31,6 +32,10 @@ interface NewsCardProps {
 export default function NewsCard({ article, isActive }: NewsCardProps) {
   const [imageError, setImageError] = useState(false);
   const { colors } = useTheme();
+  const responsiveLayout = getResponsiveLayout();
+  const deviceStyles = getDeviceStyles();
+  const deviceInfo = getDeviceInfo();
+  const availableContentHeight = getAvailableContentHeight();
 
   const handleOpenLink = async () => {
     try {
@@ -97,10 +102,10 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
     setImageError(true);
   };
 
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, responsiveLayout, deviceStyles, availableContentHeight);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
       {/* Image Section - Full top portion */}
       <View style={styles.imageSection}>
         {!imageError && article.image ? (
@@ -115,8 +120,6 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
             <Text style={styles.placeholderText}>📰</Text>
           </View>
         )}
-        
-
       </View>
 
       {/* Description Section - expanded */}
@@ -127,43 +130,67 @@ export default function NewsCard({ article, isActive }: NewsCardProps) {
             <View style={styles.iconContainer}>
               <Image source={notificationIcon} style={styles.appLogo} resizeMode="cover" />
             </View>
-            <Text style={[styles.appName, { color: colors.text }]}>DailySnapShorts</Text>
+            <Text 
+              style={[styles.appName, { color: colors.text }]}
+              numberOfLines={undefined}
+              ellipsizeMode="tail"
+            >
+              DailySnapShorts
+            </Text>
           </View>
           <TouchableOpacity style={styles.shareIconContainer} onPress={handleShare}>
             <View style={styles.shareIconBackground}>
-              <Share2 size={16} color="white" />
+              <Share2 size={responsiveLayout.iconSize.small} color="white" />
             </View>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.title} numberOfLines={3}>
+        <Text 
+          style={styles.title}
+          numberOfLines={undefined}
+          ellipsizeMode="tail"
+        >
           {article.title}
         </Text>
-        <Text style={styles.description} numberOfLines={8}>
-          {article.description}
-        </Text>
+        <ScrollView 
+          style={styles.descriptionScrollContainer}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled={true}
+          bounces={false}
+          contentContainerStyle={styles.descriptionContent}
+        >
+          <Text 
+            style={styles.description}
+            numberOfLines={undefined}
+            ellipsizeMode="tail"
+          >
+            {article.description}
+          </Text>
+        </ScrollView>
       </View>
 
       {/* Link Section - positioned just above bottom bar */}
       <View style={styles.linkSection}>
         <TouchableOpacity style={styles.readMoreButton} onPress={handleOpenLink}>
-          <ExternalLink size={18} color={colors.primary} />
+          <ExternalLink size={responsiveLayout.iconSize.medium} color={colors.primary} />
           <Text style={styles.readMoreText}>View Full Article at {article.source.name}</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const createStyles = (colors: any) => StyleSheet.create({
+const createStyles = (colors: any, layout: any, deviceStyles: any, availableContentHeight: number) => StyleSheet.create({
   container: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
     backgroundColor: colors.background,
+    overflow: 'hidden',
+    position: 'relative', // Ensure proper positioning
   },
-  // Image Section - Reduced from bottom to give more text space
+  // Image Section - Responsive height based on device type
   imageSection: {
-    height: SCREEN_HEIGHT * 0.40,
+    height: layout.imageHeight,
     width: '100%',
     position: 'relative',
   },
@@ -179,7 +206,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
   },
   placeholderText: {
-    fontSize: 60,
+    fontSize: deviceStyles.textStyles.headline.fontSize * 2.5,
     opacity: 0.5,
   },
 
@@ -192,124 +219,153 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primary,
-    paddingHorizontal: 10,
+    paddingHorizontal: layout.contentPadding / 2,
     paddingVertical: 4,
     borderRadius: 15,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
-      },
-    }),
+    ...deviceStyles.cardShadow,
   },
   sourceText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: deviceStyles.textStyles.caption.fontSize,
     fontFamily: 'Inter-SemiBold',
     marginLeft: 4,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  // Share Icon - positioned on the right
+  // Share Icon - positioned on the right with responsive sizing
   shareIconContainer: {
     zIndex: 10,
+    flexShrink: 0, // Prevent share button from shrinking
+    alignSelf: 'center', // Center vertically within container
   },
   shareIconBackground: {
-    width: 28,
-    height: 28,
+    width: layout.shareButtonSize,
+    height: layout.shareButtonSize,
     backgroundColor: colors.primary,
-    borderRadius: 14,
+    borderRadius: layout.shareButtonSize / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.15,
-        shadowRadius: 2,
-        elevation: 2,
-      },
-    }),
+    ...deviceStyles.cardShadow,
   },
-  // Description Section - expanded to fill space above bottom bar
+  // Description Section - calculated height to prevent overflow
   descriptionSection: {
-    flex: 1,
-    padding: 20,
+    height: availableContentHeight,
+    padding: layout.contentPadding,
     justifyContent: 'flex-start',
-    paddingBottom: 80, // Adjusted for thinner bottom bar (50px + gap)
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    flex: 1,
+    flexDirection: 'column',
+    // Small device optimization
+    ...(layout.contentPadding < 16 && {
+      paddingHorizontal: layout.contentPadding * 0.8,
+      paddingVertical: layout.contentPadding * 0.6,
+    }),
   },
   headerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    marginTop: -24,
+    marginBottom: layout.contentPadding * 0.8,
+    marginTop: Math.max(layout.headerMarginTop, -layout.contentPadding * 0.8), // Prevent excessive negative margin
+    width: '100%',
+    minHeight: layout.logoSize,
+    paddingTop: 4, // Add small padding to ensure icons are never cut
   },
   appNameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: layout.contentPadding * 0.5,
+    minWidth: 0, // Allow shrinking below content size
+    paddingVertical: 2, // Small vertical padding to prevent text cutoff
   },
   iconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: layout.logoSize,
+    height: layout.logoSize,
+    borderRadius: layout.logoSize / 2,
     overflow: 'hidden',
     backgroundColor: colors.primary,
-    marginRight: 8,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.15,
-        shadowRadius: 2,
-        elevation: 2,
-      },
-    }),
+    marginRight: layout.contentPadding / 2.5,
+    flexShrink: 0, // Prevent icon from shrinking
+    alignSelf: 'center', // Center vertically within container
+    ...deviceStyles.cardShadow,
   },
   appLogo: {
     width: '100%',
     height: '100%',
   },
   appName: {
-    fontSize: 14,
+    fontSize: deviceStyles.textStyles.appName.fontSize,
     fontFamily: 'Inter-Bold',
     opacity: 0.8,
+    flexShrink: 1,
+    maxWidth: '100%',
+    textAlign: 'left',
+    // Small device specific adjustments
+    ...(layout.contentPadding < 16 && {
+      fontSize: deviceStyles.textStyles.appName.fontSize * 0.9,
+    }),
   },
   title: {
     color: colors.text,
-    fontSize: 22,
+    fontSize: deviceStyles.textStyles.headline.fontSize,
     fontFamily: 'Inter-Bold',
-    lineHeight: 28,
-    marginBottom: 12,
+    lineHeight: deviceStyles.textStyles.headline.lineHeight,
+    marginBottom: layout.contentPadding * 0.4, // Reduced margin for small screens
+    width: '100%',
+    flexShrink: 1,
+    textAlign: 'left',
+    paddingHorizontal: 0,
+    // Remove maxHeight for better wrapping on small devices
+    ...(layout.contentPadding < 16 && {
+      fontSize: deviceStyles.textStyles.headline.fontSize * 0.9,
+      lineHeight: deviceStyles.textStyles.headline.lineHeight * 0.9,
+      marginBottom: layout.contentPadding * 0.3,
+    }),
+  },
+  descriptionScrollContainer: {
+    flex: 1,
+    width: '100%',
+    flexShrink: 1,
+    flexGrow: 1,
+    // Remove maxHeight constraint for small devices to allow better text flow
+    ...(layout.contentPadding >= 16 && {
+      maxHeight: availableContentHeight * 0.7,
+    }),
+  },
+  descriptionContent: {
+    paddingBottom: 10, // Small padding at bottom of scroll content
+    flexGrow: 1,
+    justifyContent: 'flex-start',
   },
   description: {
     color: colors.secondary,
-    fontSize: 16,
+    fontSize: deviceStyles.textStyles.body.fontSize,
     fontFamily: 'Inter-Regular',
-    lineHeight: 22,
-    flex: 1,
+    lineHeight: deviceStyles.textStyles.body.lineHeight,
+    width: '100%',
+    paddingRight: 4, // Small padding to prevent text touching edge
+    flexShrink: 1,
+    textAlign: 'left',
+    paddingHorizontal: 0,
+    // Small device specific adjustments
+    ...(layout.contentPadding < 16 && {
+      fontSize: deviceStyles.textStyles.body.fontSize * 0.95,
+      lineHeight: deviceStyles.textStyles.body.lineHeight * 0.95,
+      paddingRight: 2,
+    }),
   },
-  // Link Section - positioned just above bottom bar
+  // Link Section - positioned just above bottom bar with responsive sizing
   linkSection: {
     position: 'absolute',
-    bottom: 60, // Adjusted for thinner bottom bar (50px + 10px gap)
+    bottom: layout.linkSectionBottom,
     left: 0,
     right: 0,
-    height: 50,
-    paddingHorizontal: 20,
+    height: layout.linkSectionHeight,
+    paddingHorizontal: layout.contentPadding,
     justifyContent: 'center',
     backgroundColor: colors.background,
     borderTopWidth: 1,
@@ -338,8 +394,11 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   readMoreText: {
     color: colors.primary,
-    fontSize: 14,
+    fontSize: deviceStyles.textStyles.caption.fontSize,
     fontFamily: 'Inter-Medium',
     marginLeft: 8,
+    flexShrink: 1,
+    textAlign: 'center',
+    maxWidth: '80%',
   },
 });

@@ -2,20 +2,25 @@ import { Tabs } from 'expo-router';
 import { StyleSheet, Platform } from 'react-native';
 import { House, Settings } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getResponsiveLayout, getDeviceStyles } from '@/util/responsiveUtils';
 
 export default function TabLayout() {
   const { colors, theme } = useTheme();
+  const responsiveLayout = getResponsiveLayout();
+  const deviceStyles = getDeviceStyles();
   
   // Contrasting colors for icons
   const contrastingColor = theme === 'dark' ? '#FFFFFF' : '#000000';
   const contrastingInactiveColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+  
+  const styles = createStyles(colors, responsiveLayout, deviceStyles);
   
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: contrastingColor,
         tabBarInactiveTintColor: contrastingInactiveColor,
-        tabBarStyle: [styles.tabBar, { backgroundColor: colors.primary }],
+        tabBarStyle: styles.tabBar,
         tabBarShowLabel: false,
         headerShown: false,
       }}
@@ -26,7 +31,7 @@ export default function TabLayout() {
           title: 'Home',
           tabBarIcon: ({ color, size, focused }) => (
             <House 
-              size={focused ? 26 : 22} 
+              size={focused ? responsiveLayout.iconSize.large + 2 : responsiveLayout.iconSize.medium} 
               color={color} 
               strokeWidth={focused ? 2.5 : 2}
             />
@@ -39,7 +44,7 @@ export default function TabLayout() {
           title: 'Settings',
           tabBarIcon: ({ color, size, focused }) => (
             <Settings 
-              size={focused ? 26 : 22} 
+              size={focused ? responsiveLayout.iconSize.large + 2 : responsiveLayout.iconSize.medium} 
               color={color} 
               strokeWidth={focused ? 2.5 : 2}
             />
@@ -50,13 +55,14 @@ export default function TabLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, layout: any, deviceStyles: any) => StyleSheet.create({
   tabBar: {
-    height: 50, // Reduced from 80px to 50px
-    paddingBottom: Platform.OS === 'ios' ? 8 : 4, // Adjust for iOS home indicator
-    paddingTop: 4,
+    height: layout.tabBarHeight,
+    paddingBottom: Platform.OS === 'ios' ? layout.tabBarHeight * 0.16 : layout.tabBarHeight * 0.08,
+    paddingTop: layout.tabBarHeight * 0.08,
     position: 'absolute',
-    borderTopWidth: 0, // Remove default border
+    borderTopWidth: 0,
+    backgroundColor: colors.primary,
     ...Platform.select({
       ios: {
         shadowColor: '#000',

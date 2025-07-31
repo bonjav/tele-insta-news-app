@@ -18,10 +18,10 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useNews } from '@/contexts/NewsContext';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { Config } from '@/constants/Config';
+import { getResponsiveLayout, getDeviceStyles, getDeviceInfo } from '@/util/responsiveUtils';
 import DebugPanel from './DebugPanel';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.8;
 
 interface SettingsSidebarProps {
   isVisible: boolean;
@@ -40,11 +40,15 @@ interface SelectionModalProps {
 
 function SelectionModal({ visible, onClose, title, options, selectedValue, onSelect }: SelectionModalProps) {
   const { colors } = useTheme();
+  const responsiveLayout = getResponsiveLayout();
+  const deviceStyles = getDeviceStyles();
 
   const handleSelect = (value: string) => {
     onSelect(value);
     onClose();
   };
+
+  const modalStyles = createModalStyles(colors, responsiveLayout, deviceStyles);
 
   return (
     <Modal
@@ -53,38 +57,37 @@ function SelectionModal({ visible, onClose, title, options, selectedValue, onSel
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>{title}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color={colors.text} />
+      <View style={modalStyles.modalOverlay}>
+        <View style={modalStyles.modalContent}>
+          <View style={modalStyles.modalHeader}>
+            <Text style={modalStyles.modalTitle}>{title}</Text>
+            <TouchableOpacity onPress={onClose} style={modalStyles.closeButton}>
+              <X size={responsiveLayout.iconSize.large} color={colors.text} />
             </TouchableOpacity>
           </View>
           
-          <ScrollView style={styles.modalOptions}>
+          <ScrollView style={modalStyles.modalOptions}>
             {options.map((option) => (
               <TouchableOpacity
                 key={option.code}
                 style={[
-                  styles.modalOption,
-                  { borderBottomColor: colors.border },
+                  modalStyles.modalOption,
                   selectedValue === option.code && { backgroundColor: colors.primary + '20' }
                 ]}
                 onPress={() => handleSelect(option.code)}
               >
-                <View style={styles.modalOptionLeft}>
-                  <Text style={[styles.modalOptionText, { color: colors.text }]}>
+                <View style={modalStyles.modalOptionLeft}>
+                  <Text style={modalStyles.modalOptionText}>
                     {option.nativeName || option.name}
                   </Text>
                   {option.nativeName && option.nativeName !== option.name && (
-                    <Text style={[styles.modalOptionSubtext, { color: colors.secondary }]}>
+                    <Text style={modalStyles.modalOptionSubtext}>
                       {option.name}
                     </Text>
                   )}
                 </View>
                 {selectedValue === option.code && (
-                  <View style={[styles.selectedIndicator, { backgroundColor: colors.primary }]} />
+                  <View style={modalStyles.selectedIndicator} />
                 )}
               </TouchableOpacity>
             ))}
@@ -100,6 +103,9 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
   const { state: settingsState, setLanguage, setLocation } = useSettings();
   const { refreshNews } = useNews();
   const { notificationsEnabled, toggleNotifications } = useNotifications();
+  const responsiveLayout = getResponsiveLayout();
+  const deviceStyles = getDeviceStyles();
+  const deviceInfo = getDeviceInfo();
   
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
@@ -130,6 +136,8 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
 
   if (!isVisible) return null;
 
+  const styles = createStyles(colors, responsiveLayout, deviceStyles);
+
   return (
     <View style={styles.overlay}>
       {/* Backdrop */}
@@ -151,22 +159,22 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
       >
         <SafeAreaView style={styles.sidebarContent} edges={['top', 'bottom']}>
           {/* Header */}
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Settings</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color={colors.text} />
+              <X size={responsiveLayout.iconSize.large} color={colors.text} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {/* Notifications Section */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Notifications</Text>
+              <Text style={styles.sectionTitle}>Notifications</Text>
               
-              <View style={[styles.option, { borderBottomColor: colors.border }]}>
+              <View style={styles.option}>
                 <View style={styles.optionLeft}>
-                  <Bell size={20} color={colors.primary} />
-                  <Text style={[styles.optionText, { color: colors.text }]}>
+                  <Bell size={responsiveLayout.iconSize.medium} color={colors.primary} />
+                  <Text style={styles.optionText}>
                     Enable Notifications
                   </Text>
                 </View>
@@ -181,102 +189,88 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
 
             {/* Language Section */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Language</Text>
+              <Text style={styles.sectionTitle}>Language</Text>
               
               <TouchableOpacity 
-                style={[styles.option, { borderBottomColor: colors.border }]}
+                style={styles.option}
                 onPress={() => setLanguageModalVisible(true)}
               >
                 <View style={styles.optionLeft}>
-                  <Globe size={20} color={colors.primary} />
-                  <Text style={[styles.optionText, { color: colors.text }]}>
+                  <Globe size={responsiveLayout.iconSize.medium} color={colors.primary} />
+                  <Text style={styles.optionText}>
                     {getCurrentLanguageName()}
                   </Text>
                 </View>
-                <ChevronRight size={20} color={colors.secondary} />
+                <ChevronRight size={responsiveLayout.iconSize.medium} color={colors.secondary} />
               </TouchableOpacity>
             </View>
 
             {/* Location Section - Only show if enabled in config */}
             {Config.UI.SHOW_LOCATION_SETTING && (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Location</Text>
+                <Text style={styles.sectionTitle}>Location</Text>
                 
                 <TouchableOpacity 
-                  style={[styles.option, { borderBottomColor: colors.border }]}
+                  style={styles.option}
                   onPress={() => setLocationModalVisible(true)}
                 >
                   <View style={styles.optionLeft}>
-                    <MapPin size={20} color={colors.primary} />
-                    <Text style={[styles.optionText, { color: colors.text }]}>
+                    <MapPin size={responsiveLayout.iconSize.medium} color={colors.primary} />
+                    <Text style={styles.optionText}>
                       {getCurrentLocationName()}
                     </Text>
                   </View>
-                  <ChevronRight size={20} color={colors.secondary} />
+                  <ChevronRight size={responsiveLayout.iconSize.medium} color={colors.secondary} />
                 </TouchableOpacity>
               </View>
             )}
 
             {/* Theme Section */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Appearance</Text>
+              <Text style={styles.sectionTitle}>Appearance</Text>
               
               {/* Theme Toggle */}
-              <View style={[styles.option, { borderBottomColor: colors.border }]}>
+              <View style={styles.option}>
                 <View style={styles.optionLeft}>
                   {theme === 'dark' ? (
-                    <Moon size={20} color={colors.primary} />
+                    <Moon size={responsiveLayout.iconSize.medium} color={colors.primary} />
                   ) : (
-                    <Sun size={20} color={colors.primary} />
+                    <Sun size={responsiveLayout.iconSize.medium} color={colors.primary} />
                   )}
-                  <Text style={[styles.optionText, { color: colors.text }]}>
+                  <Text style={styles.optionText}>
                     {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={[
-                    styles.themeToggle,
-                    {
-                      backgroundColor: theme === 'dark' ? colors.primary : colors.border,
-                      borderColor: colors.border,
-                    }
-                  ]}
-                  onPress={toggleTheme}
-                >
-                  <View
-                    style={[
-                      styles.themeToggleThumb,
-                      {
-                        backgroundColor: '#FFFFFF',
-                        transform: [{ translateX: theme === 'dark' ? 20 : 0 }],
-                      }
-                    ]}
-                  />
-                </TouchableOpacity>
+                <Switch
+                  value={theme === 'dark'}
+                  onValueChange={toggleTheme}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : theme === 'dark' ? '#FFFFFF' : '#F4F3F4'}
+                />
               </View>
             </View>
 
             {/* Debug Section - Only show if enabled in config */}
             {Config.DEBUG.ENABLE_DEBUG_PANEL && (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Development</Text>
+                <Text style={styles.sectionTitle}>Development</Text>
                 
                 <TouchableOpacity 
                   style={[styles.option, { borderBottomColor: 'transparent' }]}
                   onPress={() => setDebugPanelVisible(true)}
                 >
                   <View style={styles.optionLeft}>
-                    <Bug size={20} color={colors.primary} />
-                    <Text style={[styles.optionText, { color: colors.text }]}>Debug Panel</Text>
+                    <Bug size={responsiveLayout.iconSize.medium} color={colors.primary} />
+                    <Text style={styles.optionText}>Debug Panel</Text>
                   </View>
-                  <ChevronRight size={20} color={colors.secondary} />
+                  <ChevronRight size={responsiveLayout.iconSize.medium} color={colors.secondary} />
                 </TouchableOpacity>
               </View>
             )}
 
             {/* App Info */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>About</Text>
+              <Text style={styles.sectionTitle}>About</Text>
               <View style={[styles.option, { borderBottomColor: 'transparent' }]}>
                 <Text style={[styles.optionText, { color: colors.secondary }]}>DailySnapShorts v1.0.0</Text>
               </View>
@@ -324,7 +318,7 @@ export default function SettingsSidebar({ isVisible, onClose, slideAnim }: Setti
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, layout: any, deviceStyles: any) => StyleSheet.create({
   overlay: {
     position: 'absolute',
     top: 0,
@@ -342,19 +336,8 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    width: SIDEBAR_WIDTH,
-    ...Platform.select({
-      web: {
-        boxShadow: '2px 0 10px rgba(0, 0, 0, 0.25)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 2, height: 0 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        elevation: 10,
-      },
-    }),
+    width: layout.sidebarWidth,
+    ...deviceStyles.sidebarShadow,
   },
   sidebarContent: {
     flex: 1,
@@ -363,34 +346,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: layout.contentPadding,
     borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: deviceStyles.textStyles.headline.fontSize + 2,
     fontFamily: 'Inter-Bold',
+    color: colors.text,
   },
   closeButton: {
     padding: 4,
   },
   scrollContent: {
     flex: 1,
-    padding: 20,
+    padding: layout.contentPadding,
   },
   section: {
-    marginBottom: 30,
+    marginBottom: layout.contentPadding * 1.5,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: deviceStyles.textStyles.body.fontSize + 2,
     fontFamily: 'Inter-Bold',
-    marginBottom: 15,
+    marginBottom: layout.contentPadding * 0.75,
+    color: colors.text,
   },
   option: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 15,
+    paddingVertical: layout.contentPadding * 0.75,
     borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   optionLeft: {
     flexDirection: 'row',
@@ -398,10 +385,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionText: {
-    fontSize: 16,
+    fontSize: deviceStyles.textStyles.body.fontSize,
     fontFamily: 'Inter-Regular',
-    marginLeft: 12,
+    marginLeft: layout.contentPadding * 0.6,
+    color: colors.text,
+    flex: 1,
+    flexShrink: 1,
   },
+
+});
+
+const createModalStyles = (colors: any, layout: any, deviceStyles: any) => StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -411,30 +405,25 @@ const styles = StyleSheet.create({
   modalContent: {
     width: SCREEN_WIDTH * 0.9,
     maxHeight: SCREEN_WIDTH * 0.8,
-    borderRadius: 12,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        elevation: 10,
-      },
-    }),
+    borderRadius: layout.contentPadding * 0.6,
+    backgroundColor: colors.cardBackground,
+    ...deviceStyles.cardShadow,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: layout.contentPadding,
     borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: deviceStyles.textStyles.headline.fontSize,
     fontFamily: 'Inter-Bold',
+    color: colors.text,
+  },
+  closeButton: {
+    padding: 4,
   },
   modalOptions: {
     maxHeight: SCREEN_WIDTH * 0.6,
@@ -443,39 +432,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
+    paddingVertical: layout.contentPadding * 0.75,
+    paddingHorizontal: layout.contentPadding,
     borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   modalOptionLeft: {
     flex: 1,
   },
   modalOptionText: {
-    fontSize: 16,
+    fontSize: deviceStyles.textStyles.body.fontSize,
     fontFamily: 'Inter-Regular',
+    color: colors.text,
+    flexShrink: 1,
   },
   modalOptionSubtext: {
-    fontSize: 14,
+    fontSize: deviceStyles.textStyles.caption.fontSize,
     fontFamily: 'Inter-Regular',
     marginTop: 2,
+    color: colors.secondary,
   },
   selectedIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  themeToggle: {
-    width: 40,
-    height: 20,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  themeToggleThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#fff',
+    backgroundColor: colors.primary,
   },
 });
